@@ -13,4 +13,11 @@ Built by **Team Morgensonne** for an Agentic Commerce hackathon, using **MongoDB
 
 ## Status
 
-Planning, milestone **M0** (setup). Quick-start commands arrive with task M0-6; see [HANDBOOK.md §12](HANDBOOK.md#12-local-setup).
+Milestone **M0** (setup). A clickable **web demo v0** runs the whole magic moment (rain → options → consent → booking → re-plan → interpreter) against an in-browser mock orchestrator. Backend services follow in M1.
+
+```bash
+npm run setup   # install the frontend
+npm run dev     # http://localhost:3000
+```
+
+Branches: `main` (production) · `demo` (what we show) · `dev` (integration). See [HANDBOOK.md §11–12](HANDBOOK.md#11-ways-of-working).

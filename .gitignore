@@ -44,3 +44,6 @@ CLAUDE.md
 
 # Local UI reference screenshots (not shared)
 screenshots/
+
+# Playwright MCP scratch output
+.playwright-mcp/

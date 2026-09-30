@@ -8,7 +8,7 @@ This handbook is our single source of truth for **what** we build, **how** the p
 
 - **First time here?** Read §1 to §4 (about 10 minutes).
 - **While coding,** keep §7 (repo layout), §8 (contracts) and §10 (roadmap) open.
-- **Status:** v1 draft (2026-09-30). Anything marked *Proposed* gets confirmed at kickoff (see §6).
+- **Status:** v1.1 draft (2026-09-30). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
 
 ---
 
@@ -256,12 +256,16 @@ AYLAND/
 │   ├── demo-script.md        ← exact words and clicks for the demo (M6)
 │   └── pitch/                ← deck export (M6)
 ├── frontend/                 ← Next.js + TypeScript + Tailwind
+│   ├── e2e/                  ← Playwright golden-path checks (npm run test:e2e)
 │   └── src/
-│       ├── app/              ← pages: / (chat), /trip, /interpreter
-│       ├── components/       ← ChatPanel, VoiceButton, OptionCard, ApprovalCard,
-│       │                       Timeline, BudgetMeter, TraceDrawer, MapView
+│       ├── app/              ← pages: / (chat), /trip, /interpreter, /agents
+│       ├── components/       ← ChatPanel, Composer (voice), OptionCard, ApprovalCard,
+│       │                       Timeline, BudgetMeter, AgentSteps (trace), MapView
 │       ├── i18n/mn.ts        ← all Mongolian UI strings in one place
-│       └── lib/api.ts        ← typed client for the orchestrator API (§8.4)
+│       └── lib/
+│           ├── api.ts        ← typed client for the orchestrator API (§8.4)
+│           ├── types.ts      ← §8 shapes, snake_case
+│           └── mock/         ← in-browser mock orchestrator + Hanoi seed (until M1-A1)
 ├── backend/                  ← one Python project (uv), several processes
 │   ├── pyproject.toml
 │   ├── ayland/
@@ -420,6 +424,16 @@ agent_events { _id, trip_id, run_id, type: "tool" | "a2a" | "plan" | "booking" |
 | `nudge` | `{ text, actions[] }` |
 | `error` | `{ message }` |
 
+**v1.1 additions (found while building the web demo; confirm at M0-7)**
+
+| Change | Why |
+|---|---|
+| New event `options`: `{ run_id, options: [ { rank, offer, slot_start, slot_end, price_total, travel: { mode, duration_min, cost? }, reason } ] }` | The option cards (M2-C2) had no event to arrive in |
+| `tool.start` and `tool.end` carry `call_id` | Parallel calls of the same tool (three `get_route`s) must be matched start to end |
+| `GET /api/trips/{trip_id}` returns `{ trip, bookings, weather, now }` | The weather card and the "now" line need live context; `now` is `DEMO_NOW` in demo mode |
+| `POST /api/proposals/{id}/approve` body `{ method: "tap" \| "voice" }` and returns the same SSE stream as chat | Records how consent was given; streams the A2A call, `booking.confirmed`, `plan.updated` and the summary |
+| The trip event stream carries `nudge` and `plan.updated` | Act 1 (the unprompted rain alert) needs a push outside the chat stream |
+
 ---
 
 ## 9. Team and workstreams
@@ -454,6 +468,8 @@ Times are **hours from kickoff (H0)** and assume a build window of about 24 hour
 | **M6** Demo hardening | H19 to H24 | Feature freeze at H20, 3 rehearsals, backup video, submission done |
 
 Tick a box in the same PR that finishes the task. Task IDs (M2-B1 and so on) go in branch names and PR titles.
+
+> **Web demo v0 (2026-09-30).** The UI side of M1-C1, M2-C1, M2-C2, M3-C1, M3-C2, M4-C1, M5-C1 (simulated voice) and M5-C2 is built against an in-browser mock orchestrator that emits the §8.4 events. Those boxes stay unticked until each is wired to the real orchestrator and passes its milestone's exit check. `frontend/e2e/` already runs the Act 1 to 4 flow and is the starting point for M4-ALL.
 
 ### M0: Setup (H0 to H2)
 
@@ -530,20 +546,30 @@ Tick a box in the same PR that finishes the task. Task IDs (M2-B1 and so on) go 
 
 ### Git workflow
 
-- **`main` is always demo-able.** Never push something to `main` that breaks the running app.
+- **Long-lived branches:**
+
+  | Branch | Role | Who writes to it |
+  |---|---|---|
+  | `main` | Production: stable, tagged releases (`v0.1-magic`, submission) | Merges from `demo` only, at milestone exits |
+  | `demo` | What we run for judges and share through a tunnel; always demo-able | Fast-forwarded from `dev` once the milestone's e2e checks pass |
+  | `dev` | Integration: every feature lands here first | Squash-merged PRs from `feat/*`, `fix/*` and friends |
+
+  We do not keep separate `production` or `test` branches: `main` already plays the production role, and testing happens on every PR (`npm run lint`, `npm run typecheck`, `npm run test:e2e`), not on a branch.
+- **`demo` and `main` are always demo-able.** Never push something there that breaks the running app.
 - **Branch names:** `<type>/<task-id>-<short-name>`, for example `feat/M2-B1-weather-tool` or `fix/M1-C1-sse-reconnect`. Types: `feat`, `fix`, `docs`, `chore`, `refactor`.
 - **Commits** follow Conventional Commits with an area: `feat(mcp): add get_weather with scenario override`. Areas: `web`, `agent`, `mcp`, `a2a`, `voice`, `db`, `demo`, `docs`.
 - **Flow:**
   ```bash
-  git switch main && git pull
+  git switch dev && git pull
   git switch -c feat/M2-B1-weather-tool
   # ...small commits...
-  git pull --rebase origin main
+  git pull --rebase origin dev
   git push -u origin feat/M2-B1-weather-tool
-  # open a PR; a teammate glances at it (10 minutes max); squash-merge
+  # open a PR into dev; a teammate glances at it (10 minutes max); squash-merge
   ```
+- **Promotion** (lead, at each milestone exit): `git switch demo && git merge --ff-only dev && git push`, then after the demo check `git switch main && git merge --ff-only demo && git tag vX && git push --follow-tags`.
 - **Branches live less than 3 hours.** Merge small and often.
-- **Never** force-push `main`, and **never** commit `.env` or any key. **The repo is public.**
+- **Never** force-push `main`, `demo` or `dev`, and **never** commit `.env` or any key. **The repo is public.**
 - **Contract changes (§8)** update this handbook in the same PR, with a heads-up in team chat.
 
 ### Sync rhythm
@@ -577,11 +603,20 @@ Give the assistant this handbook first (§7 and §8 especially), so its code mat
 
 **Prerequisites:** Git, Node.js 20+, and [uv](https://docs.astral.sh/uv/), which installs Python 3.12 for us.
 
-The commands below are the target experience. Task M0-6 makes them real, and this section is updated in that PR.
+**Today (web demo v0, mock orchestrator):**
 
 ```bash
 git clone https://github.com/RedonaNova/AYLAND.git
 cd AYLAND
+git switch dev
+npm run setup            # installs the frontend
+npm run dev              # web on http://localhost:3000 (the mock orchestrator runs in the browser)
+npm run test:e2e         # golden path; set PW_CHANNEL=msedge or chrome, or run `npx playwright install chromium` once
+```
+
+**Target experience** (task M0-6 finishes it when the backend lands; update this section in that PR):
+
+```bash
 cp .env.example .env     # fill in keys (ask the team, never paste them in chat groups)
 npm run setup            # installs frontend + backend dependencies
 npm run seed             # loads demo data into MongoDB (also the demo reset)
@@ -683,3 +718,4 @@ DEMO_SCENARIO=hanoi_rain
 | Date | Version | Change |
 |---|---|---|
 | 2026-09-30 | v1 | First handbook, based on Morgensonne.docx |
+| 2026-09-30 | v1.1 | Branch model `main` / `demo` / `dev` (§11); web demo v0 with mock orchestrator and e2e checks (§7, §10, §12); §8.4 v1.1 contract additions |

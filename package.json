@@ -1,0 +1,14 @@
+{
+  "name": "ayland",
+  "private": true,
+  "description": "AYLAND: AI travel companion for Mongolian travelers (Team Morgensonne). See HANDBOOK.md.",
+  "scripts": {
+    "setup": "npm --prefix frontend install",
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix frontend run start",
+    "lint": "npm --prefix frontend run lint",
+    "typecheck": "npm --prefix frontend run typecheck",
+    "test:e2e": "npm --prefix frontend run test:e2e"
+  }
+}
