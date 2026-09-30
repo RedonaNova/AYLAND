@@ -38,3 +38,9 @@ desktop.ini
 # Logs and local output
 *.log
 coverage/
+
+# Personal AI assistant instructions (not shared)
+CLAUDE.md
+
+# Local UI reference screenshots (not shared)
+screenshots/
