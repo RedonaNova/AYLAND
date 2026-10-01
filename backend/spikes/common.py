@@ -20,6 +20,12 @@ DEMO_LINES = [
     "Бороо орж эхэллээ. Өнөөдрийн хоёр гадаа хөтөлбөрт нөлөөлөх тул өөрчлөх үү?",
 ]
 
+# What is actually said: STT writes numbers as words, so score against this, not the digits.
+SPOKEN_LINES = [
+    "Бид дөрвүүлээ Ханойд байна, бороо орчихлоо, өнөөдөр нэг зуун доллар дотор юу хийж болох вэ?",
+    *DEMO_LINES[1:],
+]
+
 
 def normalize(text: str) -> str:
     without_punctuation = re.sub(r"[^\w\s]", " ", text.lower())

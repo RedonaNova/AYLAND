@@ -12,7 +12,17 @@ import asyncio
 
 from ayland.voice import oyu as voice
 
-from .common import AUDIO_DIR, DEMO_LINES, RECORDINGS_DIR, cer, seconds, short, wav_seconds, write_report
+from .common import (
+    AUDIO_DIR,
+    DEMO_LINES,
+    RECORDINGS_DIR,
+    SPOKEN_LINES,
+    cer,
+    seconds,
+    short,
+    wav_seconds,
+    write_report,
+)
 
 VOICES = ["mbspeech", "baseline", "mn1h"]
 AUDIO_TYPES = {".wav", ".mp3", ".ogg"}
@@ -40,7 +50,7 @@ async def main() -> None:
                 round_trip_rows.append(f"| {name} | {i} | ERROR {type(err).__name__}: {short(str(err), 80)} | | |")
                 continue
             round_trip_rows.append(
-                f"| {name} | {i} | {heard.ms:.0f} | {cer(text, heard.text):.0%} | {short(heard.text, 90)} |"
+                f"| {name} | {i} | {heard.ms:.0f} | {cer(SPOKEN_LINES[i - 1], heard.text):.0%} | {short(heard.text, 90)} |"
             )
 
     lines += [
@@ -64,7 +74,7 @@ async def main() -> None:
         lines += ["| File | Expected | STT ms | CER | Heard |", "|---|---|---|---|---|"]
         for path in recordings:
             line_number = int(path.stem) if path.stem.isdigit() else 0
-            expected = DEMO_LINES[line_number - 1] if 0 < line_number <= len(DEMO_LINES) else ""
+            expected = SPOKEN_LINES[line_number - 1] if 0 < line_number <= len(SPOKEN_LINES) else ""
             try:
                 heard = await voice.transcribe(path.read_bytes(), filename=path.name)
             except Exception as err:  # noqa: BLE001 - keep measuring the other recordings
