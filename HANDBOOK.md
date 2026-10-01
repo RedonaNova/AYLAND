@@ -8,7 +8,7 @@ This handbook is our single source of truth for **what** we build, **how** the p
 
 - **First time here?** Read §1 to §4 (about 10 minutes).
 - **While coding,** keep §7 (repo layout), §8 (contracts) and §10 (roadmap) open.
-- **Status:** v1.1 draft (2026-09-30). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
+- **Status:** v1.2 draft (2026-10-01). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
 
 ---
 
@@ -149,12 +149,12 @@ flowchart LR
 | Component | Tech | Responsibility | Port |
 |---|---|---|---|
 | Frontend | Next.js, TypeScript, Tailwind | Chat and voice UI, timeline, budget, map, trace panel, interpreter screen | 3000 |
-| Orchestrator | Python, FastAPI, Anthropic SDK | The main AYLAND agent. Understands the goal, calls tools, streams events and owns the consent gate | 8000 |
+| Orchestrator | Python, FastAPI, Claude Agent SDK (Claude Code CLI login), OyuLLM | The main AYLAND agent. Understands the goal, calls tools, streams events and owns the consent gate | 8000 |
 | MCP `travel-data` | Python, MCP SDK (FastMCP) | Weather (Open-Meteo plus scenario override), places, routes | 8201 |
 | MCP `merchant` | Python, MCP SDK (FastMCP) | Offer catalog search and availability, backed by MongoDB | 8202 |
 | A2A Booking Agent | Python, `a2a-sdk` | Hold, confirm and cancel bookings; writes to `bookings` | 8301 |
-| A2A Interpreter Agent | Python, `a2a-sdk`, Claude | Translate Mongolian ⇄ local language with travel context | 8302 |
-| Voice adapters | Module inside the orchestrator | Wraps the STT and TTS provider chosen in task M0-4 | none |
+| A2A Interpreter Agent | Python, `a2a-sdk`, Claude or OyuLLM (per M0-5) | Translate Mongolian ⇄ local language with travel context | 8302 |
+| Voice adapters | Module inside the orchestrator | Anir STT and tsuurAI TTS (Novelsoft, `api.oyu.so`) | none |
 | Database | MongoDB Atlas (free M0 cluster) | Users, trips, offers, proposals, bookings, memories, agent events | cloud |
 
 ### 5.2 Why each technology (for us and for the pitch)
@@ -162,7 +162,8 @@ flowchart LR
 - **MongoDB Atlas** is the agent's memory and the trip's source of truth. Documents fit itineraries naturally (a trip has days, a day has items). A geospatial index answers "near our hotel", Atlas Vector Search answers "indoor things for a rainy day" and recalls preferences, and `agent_events` is an audit log of every action the agent takes.
 - **MCP** is how the agent gets tools and data. Each data source is an MCP server, so any agent can reuse the tools (our orchestrator, the Booking Agent, even Claude Desktop), and each one is testable on its own in the MCP Inspector.
 - **A2A** is how agents cooperate. The orchestrator hands booking and interpretation to specialist agents that publish **Agent Cards**. The same open interface would let a real merchant or transport company plug in their own agent, which is our ecosystem story.
-- **Claude** handles reasoning, Mongolian understanding and tool use.
+- **Claude** handles multi-step reasoning and tool use; we reach it through the Claude Code CLI login (Claude Agent SDK), so no API key is needed.
+- **Novelsoft OyuLLM, Anir STT and tsuurAI TTS** are the Mongolian language layer the hackathon requires: OyuLLM (OpenAI-compatible, tool calling) for Mongolian text, Anir for speech in, tsuurAI for speech out. M0-5 decides how work is split between OyuLLM and Claude.
 
 ### 5.3 The magic moment, step by step
 
@@ -206,38 +207,53 @@ sequenceDiagram
 
 ## 6. Tech stack and decisions
 
-We confirm these at kickoff (task M0-8). Change the status column when the team agrees.
+Change the status column when the team agrees.
 
 | ID | Decision | Choice | Status |
 |---|---|---|---|
-| D1 | LLM | Claude through the Anthropic API, model `claude-opus-5-5`; tune `effort` for latency | Proposed |
+| D1 | LLM | **OyuLLM** (Novelsoft, required by the hackathon) plus **Claude** `claude-opus-5-5` through the Claude Code CLI login (Claude Agent SDK, no API key). Who does what is set by the M0-5 spike | Proposed |
 | D2 | Backend language | Python 3.12 (installed and managed by `uv`) with FastAPI | Proposed |
 | D3 | Frontend | Next.js (App Router), TypeScript, Tailwind; Leaflet with OpenStreetMap tiles for the map (no key needed) | Proposed |
-| D4 | Voice (Mongolian STT and TTS) | Chosen after the spike in task M0-4 | **Open** |
+| D4 | Voice (Mongolian STT and TTS) | **Anir STT** and **tsuurAI TTS** (Novelsoft, required). Voice and model tuned by the M0-4 spike. Vietnamese side of the interpreter: still open (Anir and tsuurAI are Mongolian only) | Confirmed (hackathon rule) |
 | D5 | Places and routing data | OpenStreetMap (Overpass, OSRM), free. Google Maps Platform only if someone already has a key | Proposed |
 | D6 | MCP transport | Streamable HTTP, so each server runs as its own process and can be tested alone | Proposed |
 | D7 | Demo city and currency | Hanoi, USD | Confirmed (concept doc) |
 | D8 | MongoDB driver | PyMongo async API (`AsyncMongoClient`). Motor is deprecated | Proposed |
-| D9 | Hackathon logistics | Build window, deadline, submission format (repo, video, deck), judging criteria, demo length | **Open** |
+| D9 | Hackathon logistics | See §6.1 | Confirmed (event page) |
 
-**Backend libraries:** `fastapi`, `uvicorn`, `anthropic[mcp]` (Tool Runner plus MCP conversion helpers), `mcp` (official MCP SDK), `a2a-sdk` (official A2A SDK), `pymongo`, `pydantic`, `pydantic-settings`, `httpx`, `ruff`, `pytest`.
+**Backend libraries:** `fastapi`, `uvicorn`, `claude-agent-sdk` (Claude through the Claude Code CLI), `openai` (OyuLLM is OpenAI-compatible), `mcp` (official MCP SDK), `a2a-sdk` (official A2A SDK), `pymongo`, `pydantic`, `pydantic-settings`, `httpx`, `ruff`, `pytest`.
 
 **Frontend libraries:** `next`, `react`, `tailwindcss`, `leaflet` and `react-leaflet`, plus shadcn/ui components if we want them.
 
-**Voice candidates for the spike (M0-4).** Test each one with the same three Mongolian sentences and one Vietnamese sentence. Score accuracy and latency. The support notes below are what we believe; the spike's job is to verify them.
-- **Chimege**, a Mongolian speech company with STT and TTS APIs
-- **Azure AI Speech**, which lists Mongolian (mn-MN) STT and neural TTS voices
-- **Google Cloud Speech-to-Text** with mn-MN
-- **Browser Web Speech API**, the fastest to prototype, though quality and support vary by browser
+**Novelsoft APIs** ([dev.oyu.so](https://dev.oyu.so), one key from [oyu.so/account/apikeys](https://oyu.so/account/apikeys), base `https://api.oyu.so/v1`, `Authorization: Bearer`):
+- **OyuLLM**: `POST /chat/completions`, model `oyuLLM`, OpenAI-compatible with streaming and tool calling (use the `openai` SDK with `base_url`).
+- **Anir STT**: `POST /audio/transcriptions` (multipart `file`, WAV/MP3/OGG, ≤100 MB) returns `{text}`; real-time over WebSocket `/audio/stream` with 16 kHz PCM.
+- **tsuurAI TTS**: `POST /audio/speech` `{text ≤800 chars, voice: mbspeech | baseline | mn1h}` returns WAV.
+- Also there: **Orchu** translation mn ⇄ en (`/translations`) and an MCP server at `https://api.oyu.so/mcp` that exposes these tools to any agent.
 
-Vietnamese (the interpreter's other side) is supported by most major providers.
+**Spikes.** `npm run check` pings every service; `npm run spike:llm` (M0-5) and `npm run spike:voice` (M0-4) write their results to `docs/spikes/`.
 
 > **Notes for the agent-core owner (D1)**
-> - Build the loop with the Anthropic Python SDK **Tool Runner** (`client.beta.messages.tool_runner`). Expose MCP tools to it with `anthropic.lib.tools.mcp.async_mcp_tool`. Stream responses.
-> - On `claude-opus-5-5`, thinking is adaptive and cannot be switched off. Control latency and cost with `output_config.effort` (default `medium`; try `low` for quick chat turns).
-> - Forced `tool_choice` (`any` or `tool`) is rejected on this model. Use `auto` and steer with instructions.
-> - Check `stop_reason` before reading content (handle `"refusal"`), and enable server-side fallbacks (`fallbacks: "default"` with beta `server-side-fallback-2026-07-01`).
-> - If the interpreter feels too slow on this model, choosing a faster model for that one agent is a team decision. Record it as D1b.
+> - Claude runs through the **Claude Agent SDK** (`claude-agent-sdk`), which drives the local `claude` CLI and uses its login. `backend/ayland/llm/claude.py` finds the CLI (`CLAUDE_CLI_PATH`, then PATH, then the VS Code extension's copy). Everyone running the orchestrator needs Claude Code installed and logged in.
+> - Turn off what we don't want from Claude Code: `tools=[]` (no built-in file or shell tools), `setting_sources=[]` (no user settings or CLAUDE.md), a neutral `cwd`.
+> - Our MCP servers plug straight in through `mcp_servers` (`{"type": "http", "url": ...}`); local tools (`get_trip`, `propose_booking`, ...) through `create_sdk_mcp_server`. The consent gate also sits in `can_use_tool`, on top of the approve endpoint.
+> - Keep one `ClaudeSDKClient` session per trip conversation: each `query()` starts a CLI process (about 4–6 s for a one-line reply on 2026-09-30). Stream with `include_partial_messages=True`; tune latency with `effort` (`low` for quick turns).
+> - On `claude-opus-5-5`, thinking can't be switched off and forced tool choice is rejected; steer with instructions. Never edit earlier turns of a conversation (the history must stay append-only).
+> - A public deployment would need an API key or another login model; the CLI login is fine for our own demo machine.
+
+### 6.1 Hackathon facts (D9, from [the event page](https://nerus.tv/e/agentic26))
+
+| | |
+|---|---|
+| Registration closes | **2026-10-02**; selected teams hear on 10-04 |
+| Build day | **2026-10-05** (one day); submissions due the same day; finals and awards 10-06 |
+| Team size | Up to **3** people (use the three-person split in §9) |
+| Demo | **8 minutes**: 1 min problem and solution, **3 min live demo**, 1 min architecture and tech, 3 min judge Q&A |
+| Required tech | OyuLLM, Anir STT, tsuurAI TTS (Mongolian); MongoDB; MCP; A2A; multi-step agent behaviour |
+| Submission | Repo with README and install steps, architecture diagram, agent workflow explanation, MongoDB usage notes, MCP/A2A/interoperability details, a **2–3 minute demo video** link |
+| Judging | Problem and use case 15% · Agent architecture 15% · OyuLLM and MongoDB usage 10% · Open interoperability 15% · Technical execution 15% · Innovation and demo clarity 10% · Public vote 20% |
+| Rules | Sandbox or simulated transactions only; **pre-written code is allowed if disclosed**; any language, LLM or framework; AI coding assistants allowed |
+| Prizes | ₮5M / ₮3M / ₮2M |
 
 ---
 
@@ -253,6 +269,7 @@ AYLAND/
 ├── package.json              ← root scripts: setup, dev, seed (M0-6)
 ├── docs/
 │   ├── concept/Morgensonne.docx   ← original concept (Mongolian)
+│   ├── spikes/               ← M0-4 / M0-5 results (audio stays local)
 │   ├── demo-script.md        ← exact words and clicks for the demo (M6)
 │   └── pitch/                ← deck export (M6)
 ├── frontend/                 ← Next.js + TypeScript + Tailwind
@@ -280,6 +297,7 @@ AYLAND/
 │   │   │   └── interpreter/  ← translate
 │   │   └── voice/            ← STT and TTS provider adapters
 │   ├── scripts/seed.py       ← loads data/seed into MongoDB; also the demo reset
+│   ├── spikes/               ← M0 measurements: check_services, llm_spike, voice_spike
 │   └── tests/
 └── data/
     ├── seed/                 ← demo user, Hanoi trip, merchants, offers (JSON)
@@ -475,10 +493,10 @@ Tick a box in the same PR that finishes the task. Task IDs (M2-B1 and so on) go 
 
 - [ ] **M0-1** (all) Read §1 to §4. Install Git, Node.js 20+ and `uv`. Clone the repo **outside OneDrive, Dropbox or iCloud folders**, because syncing `node_modules` and `.venv` breaks things.
 - [ ] **M0-2** (B) Create the MongoDB Atlas free cluster `ayland`, a database user and network access. Share `MONGODB_URI` privately.
-- [ ] **M0-3** (A) Create an Anthropic API key with a spend limit. Share it privately.
-- [ ] **M0-4** (D) Voice spike (§6): run the same sentences through each candidate, record accuracy and latency, and fill in D4.
-- [ ] **M0-5** (A) LLM spike: five Mongolian travel prompts, check quality and latency at effort `low` and `medium`, then confirm D1.
-- [ ] **M0-6** (C) Scaffold the repo per §7: `create-next-app` in `frontend/`, a uv project in `backend/`, root `package.json` scripts, `.env.example`. Merge one small PR quickly so everyone can pull it.
+- [x] **M0-3** (A) ~~Create an Anthropic API key~~ No key: Claude runs through each developer's Claude Code CLI login (Claude Agent SDK). Verified 2026-10-01 with `npm run check`.
+- [ ] **M0-4** (D) Voice spike (§6): `npm run spike:voice` runs the demo lines through tsuurAI (all three voices) and Anir; record your own voice in `backend/spikes/recordings/1.wav`…`3.wav` for real accuracy. Pick the voice in D4. Needs `OYU_API_KEY`.
+- [ ] **M0-5** (A) LLM spike: `npm run spike:llm` runs five Mongolian travel prompts on OyuLLM and Claude (effort `low` and `medium`) plus an OyuLLM tool-calling check; rate the answers in `docs/spikes/m0-5-llm.md`, then confirm D1 (who does what). Needs `OYU_API_KEY`.
+- [x] **M0-6** (C) Scaffold the repo per §7: `create-next-app` in `frontend/`, a uv project in `backend/`, root `package.json` scripts, `.env.example`. Merge one small PR quickly so everyone can pull it.
 - [ ] **M0-7** (all, 20 min) Walk through §8 together, adjust it, and mark it "frozen v1".
 - [ ] **M0-8** (lead) Confirm D9: deadline, submission format, judging criteria, demo length. Fill in §9 names.
 
@@ -603,56 +621,22 @@ Give the assistant this handbook first (§7 and §8 especially), so its code mat
 
 **Prerequisites:** Git, Node.js 20+, and [uv](https://docs.astral.sh/uv/), which installs Python 3.12 for us.
 
-**Today (web demo v0, mock orchestrator):**
+**Also needed:** Claude Code installed and logged in (`claude` once), because the orchestrator reaches Claude through it.
 
 ```bash
 git clone https://github.com/RedonaNova/AYLAND.git
 cd AYLAND
 git switch dev
-npm run setup            # installs the frontend
-npm run dev              # web on http://localhost:3000 (the mock orchestrator runs in the browser)
-npm run test:e2e         # golden path; set PW_CHANNEL=msedge or chrome, or run `npx playwright install chromium` once
+cp .env.example .env     # fill in MONGODB_URI and OYU_API_KEY (never paste keys in chat groups)
+npm run setup            # root tools, frontend (npm) and backend (uv sync)
+npm run check            # MongoDB, Claude (CLI), OyuLLM, tsuurAI → Anir round trip
+npm run dev              # web on :3000 (still the in-browser mock) + orchestrator API on :8000
+npm test                 # backend unit tests;  npm run test:e2e for the browser golden path
 ```
 
-**Target experience** (task M0-6 finishes it when the backend lands; update this section in that PR):
+`npm run seed` and the MCP servers and A2A agents join `npm run dev` in M1 and M2; update this section in those PRs.
 
-```bash
-cp .env.example .env     # fill in keys (ask the team, never paste them in chat groups)
-npm run setup            # installs frontend + backend dependencies
-npm run seed             # loads demo data into MongoDB (also the demo reset)
-npm run dev              # starts web, orchestrator, both MCP servers, both A2A agents
-```
-
-**Environment variables** (`.env.example`):
-
-```bash
-# LLM
-ANTHROPIC_API_KEY=
-AYLAND_MODEL=claude-opus-5-5
-
-# Database
-MONGODB_URI=
-MONGODB_DB=ayland
-
-# Voice (fill in after D4)
-STT_PROVIDER=
-TTS_PROVIDER=
-
-# Optional data providers
-GOOGLE_MAPS_API_KEY=
-VOYAGE_API_KEY=            # embeddings for vector search (Should)
-
-# Local service URLs
-ORCHESTRATOR_URL=http://localhost:8000
-MCP_TRAVEL_DATA_URL=http://localhost:8201/mcp
-MCP_MERCHANT_URL=http://localhost:8202/mcp
-A2A_BOOKING_URL=http://localhost:8301
-A2A_INTERPRETER_URL=http://localhost:8302
-
-# Demo
-DEMO_MODE=true
-DEMO_SCENARIO=hanoi_rain
-```
+**Environment variables:** see [`.env.example`](.env.example). Secrets: `MONGODB_URI` and `OYU_API_KEY`. Claude needs no key (`CLAUDE_CLI_PATH` only if auto-detection fails). Only `backend/ayland/config.py` reads them.
 
 **Handy tools**
 - **MCP Inspector** (`npx @modelcontextprotocol/inspector`) to call MCP tools by hand.
@@ -663,7 +647,7 @@ DEMO_SCENARIO=hanoi_rain
 
 ## 13. Demo-day checklist
 
-- [ ] Run `npm run seed` (reset) 10 minutes before going on stage
+- [ ] Run `npm run check` (MongoDB, Claude CLI login, OyuLLM, voice) and `npm run seed` (reset) 10 minutes before going on stage
 - [ ] DEMO_MODE is on and the scenario is set to `clear`, ready to switch to `rain` live
 - [ ] Mic tested **in the room**; the transcript shows before sending
 - [ ] Laptop charged, notifications off, browser zoom set, only the needed tabs open
@@ -682,6 +666,8 @@ DEMO_SCENARIO=hanoi_rain
 | It isn't raining in Hanoi on demo day | DEMO_MODE scenario override (§3) |
 | The LLM feels slow on stage | Stream tokens and show the trace panel so waiting looks like work, tune `effort`, keep the tool list small |
 | Free APIs rate-limit us (Open-Meteo, Overpass, OSRM) | Cache responses in MongoDB; fixtures in DEMO_MODE |
+| Novelsoft APIs are slow or rate-limited on build day (every team uses them) | Measure in M0-4/M0-5; cache TTS audio for fixed lines; typed input as STT fallback; Claude as LLM fallback |
+| Claude CLI login missing on the demo laptop | `npm run check` in the demo-day checklist; log in the day before |
 | Wi-Fi fails | Phone hotspot, backup video |
 | Integration hell at the end | Contracts frozen at M0, integration at every milestone, `main` always runs |
 | Scope creep | MoSCoW in §4; stretch work only after `v0.1-magic` is tagged |
@@ -710,6 +696,9 @@ DEMO_SCENARIO=hanoi_rain
 - MongoDB Atlas Vector Search: https://www.mongodb.com/docs/atlas/atlas-vector-search/
 - Claude tool use: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
 - Open-Meteo (free weather API): https://open-meteo.com
+- Novelsoft developer portal (OyuLLM, Anir, tsuurAI): https://dev.oyu.so
+- Claude Agent SDK: https://code.claude.com/docs/en/agent-sdk
+- Hackathon page: https://nerus.tv/e/agentic26
 
 ---
 
@@ -719,3 +708,4 @@ DEMO_SCENARIO=hanoi_rain
 |---|---|---|
 | 2026-09-30 | v1 | First handbook, based on Morgensonne.docx |
 | 2026-09-30 | v1.1 | Branch model `main` / `demo` / `dev` (§11); web demo v0 with mock orchestrator and e2e checks (§7, §10, §12); §8.4 v1.1 contract additions |
+| 2026-10-01 | v1.2 | Novelsoft OyuLLM / Anir / tsuurAI (D1, D4); Claude through the Claude Code CLI, no API key (M0-3); hackathon facts (§6.1); backend scaffold, `.env.example` and spikes (M0-6, §12) |
