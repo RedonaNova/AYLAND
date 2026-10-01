@@ -47,3 +47,7 @@ screenshots/
 
 # Playwright MCP scratch output
 .playwright-mcp/
+
+# Spike audio: generated speech and personal voice recordings stay local
+docs/spikes/audio/
+backend/spikes/recordings/

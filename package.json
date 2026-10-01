@@ -3,12 +3,20 @@
   "private": true,
   "description": "AYLAND: AI travel companion for Mongolian travelers (Team Morgensonne). See HANDBOOK.md.",
   "scripts": {
-    "setup": "npm --prefix frontend install",
-    "dev": "npm --prefix frontend run dev",
+    "setup": "npm install && npm --prefix frontend install && uv --directory backend sync",
+    "dev": "concurrently -k -n web,api -c magenta,cyan \"npm --prefix frontend run dev\" \"npm run api\"",
+    "api": "uv --directory backend run uvicorn ayland.orchestrator.app:app --reload --port 8000",
     "build": "npm --prefix frontend run build",
     "start": "npm --prefix frontend run start",
-    "lint": "npm --prefix frontend run lint",
+    "lint": "npm --prefix frontend run lint && uv --directory backend run ruff check .",
     "typecheck": "npm --prefix frontend run typecheck",
-    "test:e2e": "npm --prefix frontend run test:e2e"
+    "test": "uv --directory backend run pytest -q",
+    "test:e2e": "npm --prefix frontend run test:e2e",
+    "check": "uv --directory backend run python -m spikes.check_services",
+    "spike:llm": "uv --directory backend run python -m spikes.llm_spike",
+    "spike:voice": "uv --directory backend run python -m spikes.voice_spike"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
   }
 }
