@@ -492,7 +492,7 @@ Tick a box in the same PR that finishes the task. Task IDs (M2-B1 and so on) go 
 ### M0: Setup (H0 to H2)
 
 - [ ] **M0-1** (all) Read §1 to §4. Install Git, Node.js 20+ and `uv`. Clone the repo **outside OneDrive, Dropbox or iCloud folders**, because syncing `node_modules` and `.venv` breaks things.
-- [ ] **M0-2** (B) Create the MongoDB Atlas free cluster `ayland`, a database user and network access. Share `MONGODB_URI` privately.
+- [x] **M0-2** (B) Create the MongoDB Atlas free cluster `ayland`, a database user and network access. Share `MONGODB_URI` privately. Verified 2026-10-01 with `npm run check` (warm ping about 110–200 ms; the first connection takes about 1.5 s, so keep one client open).
 - [x] **M0-3** (A) ~~Create an Anthropic API key~~ No key: Claude runs through each developer's Claude Code CLI login (Claude Agent SDK). Verified 2026-10-01 with `npm run check`.
 - [ ] **M0-4** (D) Voice spike (§6): `npm run spike:voice` runs the demo lines through tsuurAI (all three voices) and Anir; record your own voice in `backend/spikes/recordings/1.wav`…`3.wav` for real accuracy. Pick the voice in D4. Needs `OYU_API_KEY`.
 - [ ] **M0-5** (A) LLM spike: `npm run spike:llm` runs five Mongolian travel prompts on OyuLLM and Claude (effort `low` and `medium`) plus an OyuLLM tool-calling check; rate the answers in `docs/spikes/m0-5-llm.md`, then confirm D1 (who does what). Needs `OYU_API_KEY`.
