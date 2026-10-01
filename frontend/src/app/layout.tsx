@@ -4,7 +4,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { Providers } from "@/components/shell/Providers";
 import "./globals.css";
 
-// Mongolian needs cyrillic-ext (Ө ө Ү ү); the interpreter shows Vietnamese.
+// Mongolian needs cyrillic-ext (Ө ө Ү ү); Hanoi place names need the Vietnamese subset.
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin", "cyrillic", "cyrillic-ext", "vietnamese"],

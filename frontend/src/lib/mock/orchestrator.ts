@@ -533,9 +533,9 @@ export function createMockOrchestrator(): AylandApi {
     async interpret({ text, source_lang, target_lang }) {
       await sleep(650 + Math.random() * 300);
       const phrase = lookup(text, source_lang);
-      if (phrase) return { text: phrase[target_lang], pronunciation_hint: target_lang === "vi" ? phrase.hint : undefined };
+      if (phrase) return { text: phrase[target_lang], pronunciation_hint: target_lang === "en" ? phrase.hint : undefined };
       return {
-        text: target_lang === "vi" ? "(Bản demo: câu này chưa có bản dịch)" : "(Демо: энэ өгүүлбэрийн орчуулга бэлэн биш)",
+        text: target_lang === "en" ? "(Demo: no translation for this sentence yet)" : "(Демо: энэ өгүүлбэрийн орчуулга бэлэн биш)",
       };
     },
 

@@ -164,4 +164,4 @@ export type AgentEvent =
   | { type: "nudge"; data: { text: string; detail?: string; actions: NudgeAction[] } }
   | { type: "error"; data: { message: string } };
 
-export type Lang = "mn" | "vi";
+export type Lang = "mn" | "en";

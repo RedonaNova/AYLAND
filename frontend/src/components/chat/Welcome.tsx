@@ -87,7 +87,7 @@ export function Welcome() {
         >
           <div className="space-y-1.5 text-[11px]">
             <div className="w-fit rounded-xl rounded-bl-sm bg-white/90 px-2.5 py-1 text-ink-950">Сайн байна уу!</div>
-            <div className="ml-auto w-fit rounded-xl rounded-br-sm bg-mint-400/90 px-2.5 py-1 text-ink-950">Xin chào!</div>
+            <div className="ml-auto w-fit rounded-xl rounded-br-sm bg-mint-400/90 px-2.5 py-1 text-ink-950">Hello!</div>
           </div>
         </FeatureCard>
       </motion.div>

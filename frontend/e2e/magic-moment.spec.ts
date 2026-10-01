@@ -70,10 +70,12 @@ test("voice input shows the transcript before it is sent", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Усан хүүхэлдэйн театр" })).toBeVisible(AGENT_TIMEOUT);
 });
 
-test("interpreter translates Mongolian to Vietnamese (Act 4)", async ({ page }) => {
+test("interpreter translates Mongolian to English (Act 4)", async ({ page }) => {
   await page.goto("/interpreter");
   await page.getByRole("button", { name: /^Би/ }).click();
-  await expect(page.getByText("Xin chào, chúng tôi đã đặt lớp nấu ăn cho 4 người.", { exact: false }).first()).toBeVisible(AGENT_TIMEOUT);
+  await expect(page.getByText("Hello, we booked a cooking class for 4 people.", { exact: false }).first()).toBeVisible(AGENT_TIMEOUT);
+  await page.getByRole("button", { name: /^Тэд/ }).click();
+  await expect(page.getByText("Тавтай морил!", { exact: false }).first()).toBeVisible(AGENT_TIMEOUT);
 });
 
 test("pages load without console errors (desktop and mobile sheet)", async ({ page }) => {

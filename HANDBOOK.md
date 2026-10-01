@@ -8,7 +8,7 @@ This handbook is our single source of truth for **what** we build, **how** the p
 
 - **First time here?** Read §1 to §4 (about 10 minutes).
 - **While coding,** keep §7 (repo layout), §8 (contracts) and §10 (roadmap) open.
-- **Status:** v1.2 draft (2026-10-01). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
+- **Status:** v1.3 draft (2026-10-01). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
 
 ---
 
@@ -69,7 +69,7 @@ The original concept (in Mongolian) is [docs/concept/Morgensonne.docx](docs/conc
 | 8 | Real-time re-planning (weather, delays, closures, budget) | **Must** ★ | `update_trip_plan`, weather tool |
 | 9 | Daily itinerary | Should | Timeline UI, planner |
 | 10 | Maps and directions | Should | `get_route`, Leaflet map |
-| 11 | Interpreter (Mongolian ⇄ local language) | **Must** | A2A Interpreter Agent, STT/TTS |
+| 11 | Interpreter (Mongolian ⇄ local language; **English first**, other languages later) | **Must** | A2A Interpreter Agent, STT/TTS |
 | 12 | All trip info in one place (tickets, bookings, addresses, confirmations) | **Must** | MongoDB `trips` and `bookings`, trip panel |
 | 13 | Coordinate group preferences | Should: group size and shared budget. Stretch: per-person preferences | `trips.travelers` |
 | 14 | Proactively suggest the next step | Should | Nudge cards after events (rain, booking) |
@@ -90,7 +90,7 @@ Every task in this plan serves this story of about three minutes. **If a task do
 | **1. Rain** (15s) | The weather turns to rain (DEMO_MODE scenario). AYLAND flags it on its own: *"Бороо орж эхэллээ. Өнөөдрийн хоёр гадаа хөтөлбөрт нөлөөлөх тул өөрчлөх үү?"* | The agent notices the change without being asked | 8, 14 |
 | **2. Ask** (60s) | Bat holds the mic: *"Бид 4-үүлээ Ханойд байна, бороо орчихлоо, өнөөдөр 100$ дотор юу хийж болох вэ?"* | The trace panel lights up: weather, trip, offers, routes. Two or three options appear with per-person and total cost and travel time, spoken back in Mongolian | 1, 3, 4, 5, 6, 10 |
 | **3. Act** (45s) | *"Хоёр дахь хувилбарыг захиалаад өгөөч."* An approval card appears and Bat taps **Approve** | An A2A call to the Booking Agent returns a confirmation code. The timeline re-flows, the budget meter drops and the map pin moves | 7, 8, 12 |
-| **4. Companion** (45s) | Interpreter mode at the venue: Mongolian ⇄ Vietnamese, by voice with large text on screen | A real conversation across two languages | 11 |
+| **4. Companion** (45s) | Interpreter mode at the venue: Mongolian ⇄ English, by voice with large text on screen | A real conversation across two languages | 11 |
 | **Close** (15s) | *"Not a chatbot. An agent that decides and acts, with your consent. MongoDB remembers, MCP connects, A2A collaborates."* | | |
 
 **Why we need DEMO_MODE:** it may not be raining in Hanoi on demo day. The weather tool supports a scenario override (`data/scenarios/hanoi_rain.json`), so the story is reproducible. Everything else stays real: the tool calls, the reasoning, the booking and the database writes. If judges ask, we say so openly.
@@ -105,7 +105,7 @@ Every task in this plan serves this story of about three minutes. **If a task do
 - Trip state in MongoDB: plan, budget, bookings, and a re-plan tool
 - Consent-gated booking through the A2A Booking Agent
 - UI: chat, option cards, approval card, today's timeline, budget meter, agent trace panel
-- Mongolian voice in and out, and interpreter mode (mn ⇄ vi)
+- Mongolian voice in and out, and interpreter mode (mn ⇄ en for now; any visited country's language later)
 - Seed data for Hanoi and a one-command demo reset
 
 **Should** (makes it impressive)
@@ -153,7 +153,7 @@ flowchart LR
 | MCP `travel-data` | Python, MCP SDK (FastMCP) | Weather (Open-Meteo plus scenario override), places, routes | 8201 |
 | MCP `merchant` | Python, MCP SDK (FastMCP) | Offer catalog search and availability, backed by MongoDB | 8202 |
 | A2A Booking Agent | Python, `a2a-sdk` | Hold, confirm and cancel bookings; writes to `bookings` | 8301 |
-| A2A Interpreter Agent | Python, `a2a-sdk`, Claude or OyuLLM (per M0-5) | Translate Mongolian ⇄ local language with travel context | 8302 |
+| A2A Interpreter Agent | Python, `a2a-sdk`, Orchu MT (Novelsoft, mn ⇄ en), Claude for context | Translate Mongolian ⇄ English (other languages later) with travel context | 8302 |
 | Voice adapters | Module inside the orchestrator | Anir STT and tsuurAI TTS (Novelsoft, `api.oyu.so`) | none |
 | Database | MongoDB Atlas (free M0 cluster) | Users, trips, offers, proposals, bookings, memories, agent events | cloud |
 
@@ -214,7 +214,7 @@ Change the status column when the team agrees.
 | D1 | LLM | **OyuLLM** (Novelsoft, required by the hackathon) plus **Claude** `claude-opus-5-5` through the Claude Code CLI login (Claude Agent SDK, no API key). Who does what is set by the M0-5 spike | Proposed |
 | D2 | Backend language | Python 3.12 (installed and managed by `uv`) with FastAPI | Proposed |
 | D3 | Frontend | Next.js (App Router), TypeScript, Tailwind; Leaflet with OpenStreetMap tiles for the map (no key needed) | Proposed |
-| D4 | Voice (Mongolian STT and TTS) | **Anir STT** and **tsuurAI TTS** (Novelsoft, required). Voice and model tuned by the M0-4 spike. Vietnamese side of the interpreter: still open (Anir and tsuurAI are Mongolian only) | Confirmed (hackathon rule) |
+| D4 | Voice (Mongolian STT and TTS) | **Anir STT** and **tsuurAI TTS** (Novelsoft, required). Voice and model tuned by the M0-4 spike. English side of the interpreter: browser Web Speech API (en-US); translation by Orchu (mn ⇄ en, about 0.4–0.8 s per sentence, tested 2026-10-01) | Confirmed (hackathon rule) |
 | D5 | Places and routing data | OpenStreetMap (Overpass, OSRM), free. Google Maps Platform only if someone already has a key | Proposed |
 | D6 | MCP transport | Streamable HTTP, so each server runs as its own process and can be tested alone | Proposed |
 | D7 | Demo city and currency | Hanoi, USD | Confirmed (concept doc) |
@@ -482,7 +482,7 @@ Times are **hours from kickoff (H0)** and assume a build window of about 24 hour
 | **M2** Tools via MCP | H5 to H9 | The rain question is answered with real tool calls, visible in the trace panel |
 | **M3** Plan and budget | H8 to H12 | The agent re-plans; timeline and budget update live |
 | **M4** ★ Magic moment (text) | H12 to H15 | Acts 2 and 3 run end to end from a fresh reset, 3 times in a row. Tag `v0.1-magic` |
-| **M5** Voice and interpreter | H15 to H19 | The magic moment works by voice; the interpreter round trip mn ⇄ vi works |
+| **M5** Voice and interpreter | H15 to H19 | The magic moment works by voice; the interpreter round trip mn ⇄ en works |
 | **M6** Demo hardening | H19 to H24 | Feature freeze at H20, 3 rehearsals, backup video, submission done |
 
 Tick a box in the same PR that finishes the task. Task IDs (M2-B1 and so on) go in branch names and PR titles.
@@ -544,7 +544,7 @@ Tick a box in the same PR that finishes the task. Task IDs (M2-B1 and so on) go 
 
 - [ ] **M5-C1** Push-to-talk mic: record, transcribe, show the transcript, send to chat. Replies play through TTS (with a mute toggle).
 - [ ] **M5-C2** Interpreter screen: two large buttons ("Би" and "Тэд"), large translated text for showing to locals, audio playback.
-- [ ] **M5-D1** Interpreter flow: STT in the source language, A2A `translate`, TTS in the target language. The target language comes from the trip destination.
+- [ ] **M5-D1** Interpreter flow: STT in the source language (Anir for mn, browser for en), A2A `translate` (Orchu), TTS in the target language (tsuurAI for mn, browser for en). English for now; later the target language comes from the trip destination.
 - [ ] **M5-A1** Nudges: a rain alert when the scenario changes, and "time to leave" after a booking, using `get_route`.
 - [ ] **M5-A2** *(Should)* Voice approval: saying "Тийм, захиал" approves the card currently on screen. The card must still be visible.
 
@@ -709,3 +709,4 @@ npm test                 # backend unit tests;  npm run test:e2e for the browser
 | 2026-09-30 | v1 | First handbook, based on Morgensonne.docx |
 | 2026-09-30 | v1.1 | Branch model `main` / `demo` / `dev` (§11); web demo v0 with mock orchestrator and e2e checks (§7, §10, §12); §8.4 v1.1 contract additions |
 | 2026-10-01 | v1.2 | Novelsoft OyuLLM / Anir / tsuurAI (D1, D4); Claude through the Claude Code CLI, no API key (M0-3); hackathon facts (§6.1); backend scaffold, `.env.example` and spikes (M0-6, §12) |
+| 2026-10-01 | v1.3 | Interpreter is Mongolian ⇄ English for now (any destination language later); Orchu for translation |

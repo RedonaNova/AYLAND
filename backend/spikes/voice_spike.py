@@ -90,8 +90,8 @@ async def main() -> None:
         "",
         "## Not covered by Novelsoft",
         "",
-        "Anir and tsuurAI are Mongolian only. The interpreter's Vietnamese side (Act 4) needs another engine: "
-        "the browser Web Speech API (vi-VN) is the quickest candidate to try next.",
+        "Anir and tsuurAI are Mongolian only. The interpreter's English side (Act 4) uses the browser Web Speech API "
+        "(en-US) for speech in and out; Orchu (Novelsoft) translates mn ⇄ en.",
     ]
     print("report:", write_report("m0-4-voice", "M0-4 voice spike: tsuurAI TTS + Anir STT", "voice_spike.py", lines))
 

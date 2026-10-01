@@ -21,8 +21,8 @@ interface Turn {
 }
 
 const LANG: Record<Side, { from: Lang; to: Lang }> = {
-  me: { from: "mn", to: "vi" },
-  them: { from: "vi", to: "mn" },
+  me: { from: "mn", to: "en" },
+  them: { from: "en", to: "mn" },
 };
 const WORD_MS = 140;
 const LEAD_MS = 500;
@@ -96,10 +96,10 @@ export default function InterpreterPage() {
         <h1 className="font-display text-lg font-semibold">{mn.interpreter.title}</h1>
         <span className="flex items-center gap-1.5 rounded-full bg-white/[0.05] px-2.5 py-1 text-xs text-fg-muted ring-1 ring-white/[0.07]">
           <LangBadge lang="mn" />
-          <span className="hidden sm:inline">Монгол</span>
+          <span className="hidden sm:inline">{mn.interpreter.langName.mn}</span>
           <ArrowRightLeft className="size-3" />
-          <span className="hidden sm:inline">Tiếng Việt</span>
-          <LangBadge lang="vi" />
+          <span className="hidden sm:inline">{mn.interpreter.langName.en}</span>
+          <LangBadge lang="en" />
         </span>
         {booked && (
           <span className="hidden rounded-full bg-sunrise-soft px-2.5 py-1 text-xs text-fg ring-1 ring-white/[0.07] sm:inline">

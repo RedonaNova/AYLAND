@@ -42,4 +42,4 @@ _None yet. Record the lines as `backend/spikes/recordings/1.wav` … `3.wav` and
 
 ## Not covered by Novelsoft
 
-Anir and tsuurAI are Mongolian only. The interpreter's Vietnamese side (Act 4) needs another engine: the browser Web Speech API (vi-VN) is the quickest candidate to try next.
+Anir and tsuurAI are Mongolian only. The interpreter's English side (Act 4) uses the browser Web Speech API (en-US) for speech in and out; Orchu (Novelsoft) translates mn ⇄ en.
