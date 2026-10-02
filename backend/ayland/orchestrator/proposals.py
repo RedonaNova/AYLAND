@@ -5,7 +5,9 @@ trip: a new one expires the others, so a later "yes" can never approve a card th
 Approving (M4) is the only path that books, and it is not a tool.
 """
 
+import asyncio
 import uuid
+from collections import defaultdict
 from typing import Any
 
 from ayland import budget, clock
@@ -16,8 +18,17 @@ from ayland.mcp_servers.merchant.catalog import group_total
 from . import offers
 from .audit import audit
 
+# Expire-then-insert must not interleave: the model can call propose_booking twice in parallel within one turn,
+# and both would otherwise stay open. One orchestrator process serves the demo, so a lock per trip suffices.
+_proposing: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+
 
 async def propose(trip_id: str, offer_id: str, slot_start: str, party_size: int | None, run_id: str) -> dict[str, Any]:
+    async with _proposing[trip_id]:
+        return await _propose(trip_id, offer_id, slot_start, party_size, run_id)
+
+
+async def _propose(trip_id: str, offer_id: str, slot_start: str, party_size: int | None, run_id: str) -> dict[str, Any]:
     db = get_db()
     trip = await repo.get_trip(db, trip_id)
     offer = (await offers.find(db, [offer_id])).get(offer_id)

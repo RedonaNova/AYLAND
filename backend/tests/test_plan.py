@@ -129,3 +129,12 @@ def test_a_freed_budget_allows_the_new_item() -> None:
 
 def test_the_trip_budget() -> None:
     assert budget.whole_trip(trip()) == {"total": 2400, "spent": 1236, "remaining": 1164}
+
+
+def test_an_item_moved_and_then_cancelled_in_one_set_is_not_checked() -> None:
+    changes = [
+        {"op": "move", "item_id": "d3-6", "start": "15:00", "end": "16:00"},  # would clash with the cyclo tour
+        {"op": "cancel", "item_id": "d3-6"},
+    ]
+    plan = apply(trip(), changes, TODAY, NOW)
+    assert items(plan.days, TODAY)["d3-6"]["status"] == "cancelled"

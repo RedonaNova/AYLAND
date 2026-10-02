@@ -247,6 +247,8 @@ async def chat_turn(trip_id: str, message: str, run_id: str) -> AsyncIterator[Ev
             if item["type"] == "message.delta":
                 reply += data["text"]
             elif item["type"] == "tool.end":
+                # The tool call itself. Tools that change state (plan, proposals) also log their action as a
+                # `plan` or `booking` event: §5.4 rule 3 wants both the call and the change on record.
                 await audit(
                     trip_id,
                     run_id,
