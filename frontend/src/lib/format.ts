@@ -51,17 +51,22 @@ export interface DayBudget {
  * Today's money: done items count as spent, booked items as committed,
  * planned items as expected. Remaining is what is free to spend.
  */
+const cents = (amount: number) => Math.round(amount * 100) / 100;
+
+/** The same formula as the backend's budget service (backend/ayland/budget.py `day`), rounding included. */
 export function dayBudget(trip: Trip, date: string): DayBudget {
   const items = dayOf(trip, date)?.items ?? [];
   const sum = (status: PlanItemStatus) =>
-    items
-      .filter((i) => i.status === status)
-      .reduce((total, i) => total + groupAmount(i.cost, trip.party_size), 0);
+    cents(
+      items
+        .filter((i) => i.status === status)
+        .reduce((total, i) => total + groupAmount(i.cost, trip.party_size), 0),
+    );
   const spent = sum("done");
   const booked = sum("booked");
   const planned = sum("planned");
   const limit = trip.budget.daily_limit;
-  return { limit, spent, booked, planned, remaining: limit - spent - booked - planned };
+  return { limit, spent, booked, planned, remaining: cents(limit - spent - booked - planned) };
 }
 
 /** Mongolian attributive numerals for small counts ("хоёр гадаа хөтөлбөр"). */

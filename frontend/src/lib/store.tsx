@@ -305,14 +305,25 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
 
   const reject = useCallback(
     async (proposalId: string) => {
+      const born = epoch.current;
       // Close the card first so neither Approve nor a second Decline can fire during the request.
       setProposalState(proposalId, "rejected");
-      await api.rejectProposal(proposalId);
-      const id = uid("a");
-      setItems((prev) => [
-        ...prev,
-        { id, kind: "assistant", text: mn.approval.rejectedReply, status: "done", steps: [], startedAt: Date.now(), finishedAt: Date.now() },
-      ]);
+      const reply = (text: string, error?: string) =>
+        setItems((prev) => [
+          ...prev,
+          { id: uid("a"), kind: "assistant", text, error, status: error ? "error" : "done", steps: [], startedAt: Date.now(), finishedAt: Date.now() },
+        ]);
+      try {
+        await api.rejectProposal(proposalId);
+      } catch (err) {
+        if (born !== epoch.current) return; // reset meanwhile: nothing of the old chat may reappear
+        // The backend didn't close it (already decided, replaced, or unreachable): say so, and keep it unapprovable.
+        setProposalState(proposalId, "expired");
+        reply("", errorMessage(err));
+        return;
+      }
+      if (born !== epoch.current) return;
+      reply(mn.approval.rejectedReply);
     },
     [api, setProposalState],
   );

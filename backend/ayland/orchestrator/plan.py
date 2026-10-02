@@ -1,7 +1,7 @@
 """Versioned, reversible plan changes (HANDBOOK M3-A1, §5.4 rule 2).
 
 Plan edits that spend no money need no approval because every version is kept: a change set is applied to a
-copy of the plan, checked (times, overlaps, today's budget), written as the next `version`, and the previous
+copy of the plan, checked (times, overlaps, each touched day's budget), written as the next `version`, and the previous
 days are stored in `trip_versions`. `revert` brings the previous version back as a new version, so an undo
 can itself be undone. Booked items are out of reach here: a booking changes only through the consent gate.
 """
@@ -115,19 +115,23 @@ class _Plan:
         self.changed.append(item["item_id"])
         return date
 
+    def move(self, item_id: str, to_date: str | None, start: str, end: str) -> None:
+        """New times for an editable item, on its own day unless `to_date` names another trip day."""
+        date, item = self.take(item_id)
+        to_date = to_date or date
+        item["start"], item["end"] = _times(to_date, start, end)
+        if to_date != date:
+            self.day(date).remove(item)
+            self.day(to_date).append(item)
+        self.placed.append((to_date, item))
+        self.changed.append(item_id)
+
     def apply(self, change: dict[str, Any], default_date: str) -> None:
         op = change.get("op")
         if op == "cancel":
             self.cancel(change["item_id"])
         elif op == "move":
-            date, item = self.take(change["item_id"])
-            to_date = change.get("date") or date
-            item["start"], item["end"] = _times(to_date, change["start"], change["end"])
-            if to_date != date:
-                self.day(date).remove(item)
-                self.day(to_date).append(item)
-            self.placed.append((to_date, item))
-            self.changed.append(item["item_id"])
+            self.move(change["item_id"], change.get("date"), change["start"], change["end"])
         elif op == "add":
             date = change.get("date") or default_date
             self.add(date, _new_item(change["item"], date))
@@ -142,6 +146,8 @@ class _Plan:
         """New and moved items: not in the past, not clashing with anything still on the timeline."""
         now = clock.parse_local(now_iso)
         for date, item in self.placed:
+            if item["status"] == "cancelled":  # placed, then cancelled later in the same change set
+                continue
             if clock.parse_local(item["start"]) < now:
                 raise PlanError(f"{item['title']} would start in the past ({clock.hhmm(item['start'])}).")
             for other in self.day(date):
@@ -155,7 +161,7 @@ class _Plan:
                     )
 
     def check_budget(self) -> None:
-        """No day may end up over its limit because of this change set."""
+        """No day that gets a new or moved item may end up over its limit, or further over it than before."""
         after = {**self.trip, "days": self.days}
         for date in {date for date, _ in self.placed}:
             before, left = budget.day(self.trip, date)["remaining"], budget.day(after, date)["remaining"]
