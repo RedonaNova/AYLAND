@@ -1,0 +1,79 @@
+{
+  "_comment": "Demo seed (HANDBOOK M1-B2). Dates are relative: `offset` is days from today in Hanoi, so day 3 is always today. scripts/seed.py turns this into the §8.1 documents.",
+  "timezone": "Asia/Ho_Chi_Minh",
+  "demo_now": "10:30",
+  "trip": {
+    "_id": "trip_hanoi_demo",
+    "owner_id": "user_bat",
+    "title": "Ханойн аялал",
+    "destination": { "city": "Hanoi", "country": "VN", "timezone": "Asia/Ho_Chi_Minh", "location": { "type": "Point", "coordinates": [105.8542, 21.0285] } },
+    "travelers": [
+      { "name": "Бат", "interests": ["түүх", "гэрэл зураг"] },
+      { "name": "Сараа", "interests": ["хоол", "зах"] },
+      { "name": "Тэмүүлэн", "interests": ["адал явдал", "спорт"] },
+      { "name": "Номин", "interests": ["урлаг", "кофе"] }
+    ],
+    "party_size": 4,
+    "budget": { "currency": "USD", "total": 2400, "daily_limit": 200, "spent": 1236 },
+    "hotel": { "name": "Phố Cổ Boutique Hotel", "address": "32 Hàng Bạc, Hoàn Kiếm", "location": { "type": "Point", "coordinates": [105.8522, 21.0341] } },
+    "version": 8,
+    "days": [
+      {
+        "offset": -2,
+        "items": [
+          { "item_id": "d1-1", "from": "13:05", "to": "15:10", "kind": "transport", "title": "Нислэг Улаанбаатар → Ханой", "place": { "name": "Nội Bài International Airport", "address": "Sóc Sơn, Hà Nội", "location": { "type": "Point", "coordinates": [105.8067, 21.2187] } }, "cost": { "amount": 0, "currency": "USD", "per": "person" }, "indoor": true, "status": "done" },
+          { "item_id": "d1-2", "from": "16:30", "to": "17:00", "kind": "stay", "title": "Буудалд буух", "place": { "name": "Phố Cổ Boutique Hotel", "address": "32 Hàng Bạc, Hoàn Kiếm", "location": { "type": "Point", "coordinates": [105.8522, 21.0341] } }, "cost": { "amount": 0, "currency": "USD", "per": "group" }, "indoor": true, "status": "done" },
+          { "item_id": "d1-3", "from": "19:00", "to": "21:00", "kind": "meal", "title": "Шар айрагны гудамжинд оройн хоол", "place": { "name": "Tạ Hiện", "address": "Tạ Hiện, Hoàn Kiếm", "location": { "type": "Point", "coordinates": [105.8517, 21.035] } }, "cost": { "amount": 9, "currency": "USD", "per": "person" }, "indoor": false, "status": "done" }
+        ]
+      },
+      {
+        "offset": -1,
+        "items": [
+          { "item_id": "d2-1", "from": "09:00", "to": "11:00", "kind": "activity", "title": "Уран зохиолын сүм", "place": { "name": "Văn Miếu – Quốc Tử Giám", "address": "58 Quốc Tử Giám, Đống Đa", "location": { "type": "Point", "coordinates": [105.8355, 21.0277] } }, "cost": { "amount": 1.2, "currency": "USD", "per": "person" }, "indoor": false, "status": "done" },
+          { "item_id": "d2-2", "from": "12:00", "to": "13:00", "kind": "meal", "title": "Бань ми үдийн хоол", "place": { "name": "Bánh Mì 25", "address": "25 Hàng Cá, Hoàn Kiếm", "location": { "type": "Point", "coordinates": [105.8488, 21.0367] } }, "cost": { "amount": 2.5, "currency": "USD", "per": "person" }, "indoor": true, "status": "done" },
+          { "item_id": "d2-3", "from": "15:00", "to": "16:30", "kind": "activity", "title": "Хоа Лоо шоронгийн музей", "place": { "name": "Hỏa Lò Prison", "address": "1 Hỏa Lò, Hoàn Kiếm", "location": { "type": "Point", "coordinates": [105.8465, 21.0254] } }, "cost": { "amount": 1.4, "currency": "USD", "per": "person" }, "indoor": true, "status": "done" },
+          { "item_id": "d2-4", "from": "19:30", "to": "21:30", "kind": "activity", "title": "Шөнийн зах", "place": { "name": "Chợ đêm phố cổ", "address": "Hàng Đào, Hoàn Kiếm", "location": { "type": "Point", "coordinates": [105.8508, 21.0348] } }, "cost": { "amount": 6, "currency": "USD", "per": "person" }, "indoor": false, "status": "done" }
+        ]
+      },
+      {
+        "offset": 0,
+        "items": [
+          { "item_id": "d3-1", "from": "08:00", "to": "09:00", "kind": "meal", "title": "Фо өглөөний цай", "place": { "name": "Phở Bát Đàn", "address": "49 Bát Đàn, Hoàn Kiếm", "location": { "type": "Point", "coordinates": [105.8468, 21.0335] } }, "cost": { "amount": 4, "currency": "USD", "per": "person" }, "indoor": true, "status": "done" },
+          { "item_id": "d3-2", "from": "09:15", "to": "10:15", "kind": "activity", "title": "Хоан Кием нуураар алхах", "place": { "name": "Đền Ngọc Sơn", "address": "Hồ Hoàn Kiếm", "location": { "type": "Point", "coordinates": [105.8524, 21.0307] } }, "cost": { "amount": 1, "currency": "USD", "per": "person" }, "indoor": false, "status": "done" },
+          { "item_id": "d3-3", "from": "12:00", "to": "13:00", "kind": "meal", "title": "Бун ча үдийн хоол", "place": { "name": "Bún chả Hương Liên", "address": "24 Lê Văn Hưu, Hai Bà Trưng", "location": { "type": "Point", "coordinates": [105.8526, 21.0182] } }, "cost": { "amount": 3, "currency": "USD", "per": "person" }, "indoor": true, "status": "planned" },
+          { "item_id": "d3-4", "from": "14:00", "to": "16:00", "kind": "activity", "title": "Цикло аялал", "place": { "name": "Phố cổ Hà Nội", "address": "Hàng Bạc, Hoàn Kiếm", "location": { "type": "Point", "coordinates": [105.8512, 21.0355] } }, "cost": { "amount": 10, "currency": "USD", "per": "person" }, "indoor": false, "status": "planned" },
+          { "item_id": "d3-5", "from": "16:30", "to": "18:00", "kind": "activity", "title": "Нар жаргах алхалт", "place": { "name": "Cầu Long Biên", "address": "Long Biên, Hà Nội", "location": { "type": "Point", "coordinates": [105.859, 21.043] } }, "cost": { "amount": 0, "currency": "USD", "per": "group" }, "indoor": false, "status": "planned" },
+          { "item_id": "d3-6", "from": "19:00", "to": "20:30", "kind": "meal", "title": "Вьетнам оройн хоол", "place": { "name": "Quán Ăn Ngon", "address": "18 Phan Bội Châu, Hoàn Kiếm", "location": { "type": "Point", "coordinates": [105.8436, 21.0262] } }, "cost": { "amount": 7, "currency": "USD", "per": "person" }, "indoor": true, "status": "planned" }
+        ]
+      },
+      {
+        "offset": 1,
+        "items": [
+          { "item_id": "d4-1", "from": "07:30", "to": "19:30", "kind": "activity", "title": "Ха Лонг булангийн аялал", "place": { "name": "Hạ Long Bay", "address": "Quảng Ninh", "location": { "type": "Point", "coordinates": [107.0843, 20.9101] } }, "cost": { "amount": 65, "currency": "USD", "per": "person" }, "indoor": false, "status": "booked", "booking_id": "bkg_halong" }
+        ]
+      },
+      {
+        "offset": 2,
+        "items": [
+          { "item_id": "d5-1", "from": "09:30", "to": "12:00", "kind": "free", "title": "Бэлэг дурсгал авах", "place": { "name": "Chợ Đồng Xuân", "address": "Đồng Xuân, Hoàn Kiếm", "location": { "type": "Point", "coordinates": [105.8494, 21.0381] } }, "cost": { "amount": 20, "currency": "USD", "per": "person" }, "indoor": true, "status": "planned" },
+          { "item_id": "d5-2", "from": "16:20", "to": "20:40", "kind": "transport", "title": "Нислэг Ханой → Улаанбаатар", "place": { "name": "Nội Bài International Airport", "address": "Sóc Sơn, Hà Nội", "location": { "type": "Point", "coordinates": [105.8067, 21.2187] } }, "cost": { "amount": 0, "currency": "USD", "per": "person" }, "indoor": true, "status": "planned" }
+        ]
+      }
+    ]
+  },
+  "bookings": [
+    { "_id": "bkg_flight", "proposal_id": "prp_flight", "offer_id": "off_flight", "status": "confirmed", "confirmation_code": "ULN-HAN-4Q7", "total": { "amount": 1480, "currency": "USD", "per": "group" }, "created": [-9, "11:00"], "approved": [-5, "20:10"] },
+    { "_id": "bkg_hotel", "proposal_id": "prp_hotel", "offer_id": "off_hotel", "status": "confirmed", "confirmation_code": "PCB-22918", "total": { "amount": 360, "currency": "USD", "per": "group" }, "created": [-9, "11:05"], "approved": [-5, "20:10"] },
+    { "_id": "bkg_halong", "proposal_id": "prp_halong", "offer_id": "off_halong", "status": "confirmed", "confirmation_code": "HLB-7731", "total": { "amount": 260, "currency": "USD", "per": "group" }, "created": [-1, "21:40"], "approved": [-5, "20:10"] }
+  ],
+  "offers": [
+    { "_id": "off_cooking", "merchant_id": "m_bepviet", "title": "Bếp Việt Cooking Class", "title_mn": "Вьетнам хоол хийх анги", "category": "food", "tags": ["indoor", "rainy-day", "food", "group"], "price": { "amount": 18, "currency": "USD", "per": "person" }, "duration_min": 180, "location": { "type": "Point", "coordinates": [105.8575, 21.0172] }, "address": "12 Hàng Chuối, Hai Bà Trưng", "rating": 4.8, "slots": [["14:00", 6], ["17:30", 8]], "cancellation_policy": "13:00 цагаас өмнө цуцалбал үнэгүй" },
+    { "_id": "off_puppet", "merchant_id": "m_thanglong", "title": "Thăng Long Water Puppet Theatre", "title_mn": "Усан хүүхэлдэйн театр", "category": "culture", "tags": ["indoor", "rainy-day", "culture", "family"], "price": { "amount": 8, "currency": "USD", "per": "person" }, "duration_min": 50, "location": { "type": "Point", "coordinates": [105.8532, 21.0318] }, "address": "57B Đinh Tiên Hoàng, Hoàn Kiếm", "rating": 4.6, "slots": [["15:00", 12], ["16:10", 20], ["18:30", 30]], "cancellation_policy": "Буцаалтгүй тасалбар" },
+    { "_id": "off_museum", "merchant_id": "m_vme", "title": "Vietnam Museum of Ethnology + egg coffee", "title_mn": "Угсаатны зүйн музей ба өндөгтэй кофе", "category": "culture", "tags": ["indoor", "rainy-day", "history", "budget"], "price": { "amount": 5, "currency": "USD", "per": "person" }, "duration_min": 180, "location": { "type": "Point", "coordinates": [105.7985, 21.0404] }, "address": "Nguyễn Văn Huyên, Cầu Giấy", "rating": 4.7, "slots": [["13:30", 40]], "cancellation_policy": "Хүссэн үедээ үнэгүй цуцална" },
+    { "_id": "off_lacquer", "merchant_id": "m_sonmai", "title": "Lacquer Painting Workshop", "title_mn": "Лакан зургийн дугуйлан", "category": "culture", "tags": ["indoor", "rainy-day", "art"], "price": { "amount": 22, "currency": "USD", "per": "person" }, "duration_min": 120, "location": { "type": "Point", "coordinates": [105.8431, 21.0302] }, "address": "8 Tống Duy Tân, Hoàn Kiếm", "rating": 4.5, "slots": [["14:30", 4]], "cancellation_policy": "24 цагийн өмнө" },
+    { "_id": "off_spa", "merchant_id": "m_lotus", "title": "Lotus Herbal Foot Spa", "title_mn": "Ургамлын хөлийн иллэг", "category": "wellness", "tags": ["indoor", "rainy-day", "wellness"], "price": { "amount": 16, "currency": "USD", "per": "person" }, "duration_min": 60, "location": { "type": "Point", "coordinates": [105.8495, 21.0329] }, "address": "21 Hàng Bè, Hoàn Kiếm", "rating": 4.4, "slots": [["15:00", 4]], "cancellation_policy": "2 цагийн өмнө" },
+    { "_id": "off_escape", "merchant_id": "m_lockin", "title": "Lock-in Escape Room", "title_mn": "Оргох өрөө", "category": "activity", "tags": ["indoor", "rainy-day", "group"], "price": { "amount": 12, "currency": "USD", "per": "person" }, "duration_min": 60, "location": { "type": "Point", "coordinates": [105.8398, 21.0231] }, "address": "5 Trần Quốc Toản, Hoàn Kiếm", "rating": 4.3, "slots": [["14:00", 1]], "cancellation_policy": "Буцаалтгүй" },
+    { "_id": "off_coffee", "merchant_id": "m_robusta", "title": "Vietnamese Coffee Workshop", "title_mn": "Вьетнам кофе бэлтгэх сургалт", "category": "food", "tags": ["indoor", "rainy-day", "food"], "price": { "amount": 14, "currency": "USD", "per": "person" }, "duration_min": 90, "location": { "type": "Point", "coordinates": [105.8519, 21.0297] }, "address": "3 Lý Quốc Sư, Hoàn Kiếm", "rating": 4.6, "slots": [["15:30", 6]], "cancellation_policy": "4 цагийн өмнө үнэгүй" },
+    { "_id": "off_kayak", "merchant_id": "m_westlake", "title": "West Lake Kayak Tour", "title_mn": "Баруун нуурт каяк", "category": "activity", "tags": ["outdoor", "adventure"], "price": { "amount": 24, "currency": "USD", "per": "person" }, "duration_min": 120, "location": { "type": "Point", "coordinates": [105.8194, 21.0588] }, "address": "Tây Hồ, Hà Nội", "rating": 4.5, "slots": [["15:00", 8]], "cancellation_policy": "24 цагийн өмнө" }
+  ]
+}

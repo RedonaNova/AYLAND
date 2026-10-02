@@ -6,8 +6,10 @@ uv run python -m spikes.check_services
 import asyncio
 from collections.abc import Awaitable, Callable
 
+from pymongo.errors import PyMongoError
+
 from ayland.config import get_settings
-from ayland.db.client import ping
+from ayland.db.client import explain, ping
 from ayland.llm import claude, oyu
 from ayland.voice import oyu as voice
 
@@ -17,7 +19,10 @@ GREETING = "Сайн байна уу? Нэг өгүүлбэрээр, монго�
 
 
 async def mongodb() -> str:
-    return f"ping {await ping():.0f} ms · db '{get_settings().mongodb_db}'"
+    try:
+        return f"ping {await ping():.0f} ms · db '{get_settings().mongodb_db}'"
+    except PyMongoError as err:
+        raise RuntimeError(explain(err)) from err
 
 
 async def claude_cli() -> str:

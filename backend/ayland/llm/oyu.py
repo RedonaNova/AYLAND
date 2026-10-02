@@ -8,17 +8,7 @@ from typing import Any
 from openai import AsyncOpenAI
 
 from ayland.config import get_settings
-
-
-class OyuNotConfigured(RuntimeError):
-    """OYU_API_KEY is missing from .env."""
-
-
-def api_key() -> str:
-    key = get_settings().oyu_api_key
-    if key is None:
-        raise OyuNotConfigured("Set OYU_API_KEY in .env (create one at https://oyu.so/account/apikeys).")
-    return key.get_secret_value()
+from ayland.novelsoft import api_key
 
 
 @lru_cache

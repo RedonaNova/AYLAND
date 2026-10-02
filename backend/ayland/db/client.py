@@ -30,3 +30,10 @@ async def ping() -> float:
     started = time.perf_counter()
     await get_client().admin.command("ping")
     return (time.perf_counter() - started) * 1000
+
+
+def explain(err: Exception) -> str:
+    """A readable reason for a failed connection; Atlas answers a non-allowlisted IP with a TLS alert."""
+    if "SSL handshake failed" in str(err):
+        return "Atlas refused this machine: add its IP under Atlas → Security → Network Access."
+    return f"{type(err).__name__}: {err}"

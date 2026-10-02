@@ -1,6 +1,6 @@
 import httpx
 
-from ayland.voice.oyu import _retry_after
+from ayland.novelsoft import _retry_after
 
 
 def test_retry_after_prefers_the_server_header() -> None:

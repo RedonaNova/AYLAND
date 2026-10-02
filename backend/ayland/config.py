@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     claude_cli_path: str = ""
     claude_model: str = "claude-opus-5-5"
     claude_effort: str = "medium"
+    claude_chat_effort: str = "low"  # chat turns are latency-bound on stage (D1)
 
     # Novelsoft, required by the hackathon: OyuLLM, Anir STT, tsuurAI TTS (one key for all).
     oyu_api_key: SecretStr | None = None
