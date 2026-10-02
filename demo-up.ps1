@@ -39,7 +39,7 @@ if ($Build) {
 $env:A2A_BOOKING_URL = "http://localhost:$bookingPort"
 Start-Process -FilePath "uv" -WindowStyle Hidden -WorkingDirectory (Join-Path $root "backend") `
     -ArgumentList "run", "uvicorn", "ayland.a2a_agents.booking.server:app", "--port", "$bookingPort" `
-    -RedirectStandardOutput "$logsooking.log" -RedirectStandardError "$logsooking.err.log" | Out-Null
+    -RedirectStandardOutput "$logs\booking.log" -RedirectStandardError "$logs\booking.err.log" | Out-Null
 Start-Process -FilePath "uv" -WindowStyle Hidden -WorkingDirectory (Join-Path $root "backend") `
     -ArgumentList "run", "uvicorn", "ayland.orchestrator.app:app", "--port", "$apiPort", "--timeout-graceful-shutdown", "3" `
     -RedirectStandardOutput "$logs\api.log" -RedirectStandardError "$logs\api.err.log" | Out-Null
