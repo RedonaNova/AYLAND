@@ -122,7 +122,7 @@ async def with_heartbeat(frames: AsyncIterator[str], every: float = HEARTBEAT_S)
             yield frame
             pending = asyncio.ensure_future(anext(frames))
     finally:
-        pending.cancel()  # the client left mid-turn: this ends the turn (and its Claude session) too
+        pending.cancel()  # the client left: stop reading (the caller decides what happens to the turn)
 
 
 _background: set[asyncio.Task[None]] = set()  # strong references, so pending tasks aren't garbage-collected
@@ -268,7 +268,10 @@ async def chat_turn(trip_id: str, message: str, run_id: str) -> AsyncIterator[Ev
     except Exception as err:  # noqa: BLE001 - the turn must end with a readable error, not a silent stop
         yield {"type": "error", "data": {"message": f"{type(err).__name__}: {err}"}}
     if reply:
-        await repo.save_message(get_db(), trip_id, "assistant", reply, run_id)
+        try:
+            await repo.save_message(get_db(), trip_id, "assistant", reply, run_id)
+        except (PyMongoError, MongoNotConfigured) as err:  # the reply already reached the traveler
+            logger.warning("Assistant reply not saved: %s", explain(err))
 
 
 async def start_chat(body: ChatRequest) -> Run:
@@ -284,9 +287,17 @@ async def start_chat(body: ChatRequest) -> Run:
 
 @app.post("/api/chat")
 async def chat(body: ChatRequest) -> StreamingResponse:
-    """One agent turn as SSE (§8.4). The turn runs in the background, so a dropped connection doesn't cut it."""
+    """One agent turn as SSE (§8.4), read from its background run; the client leaving ends the turn."""
     run = await start_chat(body)
-    return stream(with_heartbeat(sse(item) async for item in run.stream()))
+
+    async def frames() -> AsyncIterator[str]:
+        try:
+            async for item in run.stream():
+                yield sse(item)
+        finally:
+            runs.cancel(run.id)  # a client that left mid-turn ends it (no-op once the turn is done)
+
+    return stream(with_heartbeat(frames()))
 
 
 @app.post("/api/chat/runs")
@@ -383,6 +394,7 @@ async def speak(body: SpeakRequest) -> Response:
 async def demo_reset() -> dict[str, str]:
     db = get_db()
     trip_id = await seed.reset(db)
+    runs.cancel_trip(trip_id)  # a turn still running would otherwise answer into the fresh demo
     await agent.close(trip_id)
     trip = await repo.get_trip(db, trip_id)
     trip_events.publish(

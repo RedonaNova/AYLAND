@@ -38,7 +38,6 @@ logger = logging.getLogger("ayland.agent")
 # first use. Our tool list is small, so load it whole. Non-blocking off: the session starts with the MCP
 # servers connected (the warm-up pays for that, not the first question).
 CLI_ENV = {**ISOLATED_ENV, "ENABLE_TOOL_SEARCH": "false", "MCP_CONNECTION_NONBLOCKING": "0"}
-TOOL_FAILED = "Хэрэгсэл хариулсангүй"  # "the tool didn't answer": shown in the trace when a tool errors
 
 
 def event(kind: str, **data: Any) -> Event:
@@ -62,7 +61,7 @@ def _summary(content: Any, is_error: bool = False) -> tuple[str, str]:
     except (json.JSONDecodeError, AttributeError):
         summary = ""
     if not summary:
-        summary = TOOL_FAILED if is_error else text
+        summary = prompts.TOOL_FAILED if is_error else text
     return summary[:120], text[:300]
 
 
@@ -111,7 +110,7 @@ class Agent:
                 await client.disconnect()
 
     async def run(self, trip_id: str, message: str, run_id: str) -> AsyncIterator[Event]:
-        """One chat turn as §8.4 events. A turn cut short (client gone, error) discards the session,
+        """One chat turn as §8.4 events. A turn cut short (cancelled run, error) discards the session,
         because unread messages would otherwise leak into the next turn."""
         async with self._turns[trip_id]:
             client = await self._session(trip_id)

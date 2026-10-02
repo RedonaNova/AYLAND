@@ -5,6 +5,7 @@ from pathlib import Path
 _HERE = Path(__file__).parent
 
 NUMBERS_MN = ["тэг", "нэг", "хоёр", "гурван", "дөрвөн", "таван"]
+TOOL_FAILED = "Хэрэгсэл хариулсангүй"  # "the tool didn't answer": the trace line for a tool error
 
 
 def system_prompt(trip_id: str, today: str, now: str) -> str:
