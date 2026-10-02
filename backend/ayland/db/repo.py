@@ -11,11 +11,6 @@ from ayland.db import models
 TRIP_ID = "trip_hanoi_demo"
 Weather = Literal["clear", "rain"]
 
-WEATHER_VIEW: dict[str, dict[str, Any]] = {
-    "rain": {"condition": "rain", "temp_c": 26, "precip_prob": 90, "until": "18:00", "scenario": True},
-    "clear": {"condition": "clouds", "temp_c": 29, "precip_prob": 10, "scenario": True},
-}
-
 
 class TripNotFound(LookupError):
     """No such trip in MongoDB (run `npm run seed`)."""
@@ -38,15 +33,10 @@ async def set_weather(db: AsyncDatabase, weather: Weather) -> None:
 
 
 async def trip_view(db: AsyncDatabase, trip_id: str) -> dict[str, Any]:
-    """GET /api/trips/{trip_id}: the TripView shape the frontend expects (§8.4 v1.1)."""
+    """GET /api/trips/{trip_id} without `weather`, which the route adds from travel-data (§8.4 v1.1)."""
     trip = await get_trip(db, trip_id)
     bookings = await db.bookings.find({"trip_id": trip_id}).sort("created_at", 1).to_list()
-    return {
-        "trip": trip,
-        "bookings": bookings,
-        "weather": WEATHER_VIEW[await get_weather(db)],
-        "now": clock.now_iso(),
-    }
+    return {"trip": trip, "bookings": bookings, "now": clock.now_iso()}
 
 
 def group_amount(money: dict[str, Any], party_size: int) -> float:

@@ -13,6 +13,9 @@ from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ResultMessage
 from ayland.config import get_settings
 
 CLI_NAMES = ("claude.exe", "claude")
+# `setting_sources=[]` doesn't cover these: with a claude.ai login the CLI also loads the account's claude.ai
+# connectors (Gmail, Drive, Docs...) and the auto memory. Neither belongs in a travel agent's context.
+ISOLATED_ENV = {"ENABLE_CLAUDEAI_MCP_SERVERS": "false", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"}
 
 
 class ClaudeCliNotFound(RuntimeError):
@@ -75,6 +78,7 @@ async def ask(prompt: str, system: str = "", effort: str | None = None) -> Claud
         setting_sources=[],
         max_turns=1,
         cwd=tempfile.gettempdir(),
+        env=ISOLATED_ENV,
     )
     started = time.perf_counter()
     parts: list[str] = []

@@ -26,11 +26,15 @@ from claude_agent_sdk import (
 
 from ayland import clock
 from ayland.config import get_settings
-from ayland.llm.claude import find_cli
+from ayland.llm.claude import ISOLATED_ENV, find_cli
 
 from . import prompts, tools
 
 Event = dict[str, Any]
+# Tool search defers MCP tool definitions until the model searches for them: an extra round trip on every
+# first use. Our tool list is small, so load it whole. Non-blocking off: the session starts with the MCP
+# servers connected (the warm-up pays for that, not the first question).
+CLI_ENV = {**ISOLATED_ENV, "ENABLE_TOOL_SEARCH": "false", "MCP_CONNECTION_NONBLOCKING": "0"}
 
 
 def event(kind: str, **data: Any) -> Event:
@@ -67,12 +71,13 @@ class Agent:
             model=settings.claude_model,
             effort=settings.claude_chat_effort,
             system_prompt=prompts.system_prompt(trip_id, now[:10], clock.hhmm(now)),
-            mcp_servers={tools.SERVER: tools.build_server(trip_id)},
+            mcp_servers=tools.mcp_servers(trip_id),
             allowed_tools=tools.ALLOWED,
+            env=CLI_ENV,
             tools=[],
             setting_sources=[],
             include_partial_messages=True,
-            max_turns=8,
+            max_turns=12,  # a rain question takes about five: context, search, routes, cards, reply
             cwd=tempfile.gettempdir(),
         )
 
@@ -101,10 +106,11 @@ class Agent:
         because unread messages would otherwise leak into the next turn."""
         async with self._turns[trip_id]:
             client = await self._session(trip_id)
+            tools.shown.pop(trip_id, None)  # cards from a turn that died before emitting them
             finished = False
             try:
                 await client.query(message)
-                async for item in self._turn(client, run_id):
+                async for item in self._turn(client, trip_id, run_id):
                     yield item
                 finished = True
             finally:
@@ -112,7 +118,7 @@ class Agent:
                 if not finished and self._sessions.get(trip_id) is client:
                     await self.close(trip_id)
 
-    async def _turn(self, client: ClaudeSDKClient, run_id: str) -> AsyncIterator[Event]:
+    async def _turn(self, client: ClaudeSDKClient, trip_id: str, run_id: str) -> AsyncIterator[Event]:
         started: dict[str, tuple[float, str]] = {}
         streamed = False  # the AssistantMessage then repeats text already sent as deltas
         text_so_far = ""
@@ -152,6 +158,8 @@ class Agent:
                             summary=_summary(block.content),
                             ms=round((time.perf_counter() - t0) * 1000),
                         )
+                        if name == "present_options" and (options := tools.shown.pop(trip_id, None)):
+                            yield event("options", run_id=run_id, options=options)
             elif isinstance(message, ResultMessage):
                 if message.is_error:
                     yield event("error", message=message.result or message.subtype)

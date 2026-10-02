@@ -28,12 +28,16 @@ class TripEvents:
         return queue
 
     def unsubscribe(self, trip_id: str, queue: asyncio.Queue[Event]) -> None:
-        self._subscribers[trip_id].discard(queue)
+        listeners = self._subscribers.get(trip_id)
+        if listeners is not None:
+            listeners.discard(queue)
+            if not listeners:  # polls for unknown trip ids must not leave entries behind
+                del self._subscribers[trip_id]
 
     def publish(self, trip_id: str, event: Event) -> None:
         self._seq += 1
         self._recent[trip_id].append((self._seq, event))
-        for queue in list(self._subscribers[trip_id]):
+        for queue in list(self._subscribers.get(trip_id, ())):
             if not queue.full():
                 queue.put_nowait(event)
 
@@ -45,7 +49,7 @@ class TripEvents:
         boot, _, seq = cursor.partition(":")
         if boot != self.boot or not seq.isdigit():
             return [], True
-        return [event for n, event in self._recent[trip_id] if n > int(seq)], False
+        return [event for n, event in self._recent.get(trip_id, ()) if n > int(seq)], False
 
     async def wait(self, trip_id: str, cursor: str, timeout_s: float) -> dict[str, Any]:
         """Long poll. Without a cursor (or with a stale one), answers at once with a fresh cursor and `reset`
