@@ -6,6 +6,7 @@ conversation history stays append-only (required on claude-opus-5-5).
 
 import asyncio
 import json
+import logging
 import tempfile
 import time
 from collections import defaultdict
@@ -16,6 +17,7 @@ from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
     ClaudeSDKClient,
+    ClaudeSDKError,
     ResultMessage,
     StreamEvent,
     TextBlock,
@@ -31,10 +33,12 @@ from ayland.llm.claude import ISOLATED_ENV, find_cli
 from . import prompts, tools
 
 Event = dict[str, Any]
+logger = logging.getLogger("ayland.agent")
 # Tool search defers MCP tool definitions until the model searches for them: an extra round trip on every
 # first use. Our tool list is small, so load it whole. Non-blocking off: the session starts with the MCP
 # servers connected (the warm-up pays for that, not the first question).
 CLI_ENV = {**ISOLATED_ENV, "ENABLE_TOOL_SEARCH": "false", "MCP_CONNECTION_NONBLOCKING": "0"}
+TOOL_FAILED = "Хэрэгсэл хариулсангүй"  # "the tool didn't answer": shown in the trace when a tool errors
 
 
 def event(kind: str, **data: Any) -> Event:
@@ -49,12 +53,17 @@ def _result_text(content: Any) -> str:
     return ""
 
 
-def _summary(content: Any) -> str:
+def _summary(content: Any, is_error: bool = False) -> tuple[str, str]:
+    """(the trace's Mongolian summary, the raw text for agent_events). Our tools put a `summary` in their JSON;
+    tool errors (an MCP ToolError, bad arguments) are English text, so the trace shows a fixed Mongolian line."""
     text = _result_text(content)
     try:
-        return str(json.loads(text).get("summary", ""))[:120]
+        summary = str(json.loads(text).get("summary", ""))
     except (json.JSONDecodeError, AttributeError):
-        return text[:120]
+        summary = ""
+    if not summary:
+        summary = TOOL_FAILED if is_error else text
+    return summary[:120], text[:300]
 
 
 class Agent:
@@ -109,6 +118,7 @@ class Agent:
             tools.shown.pop(trip_id, None)  # cards from a turn that died before emitting them
             finished = False
             try:
+                await self._reconnect_mcp(client)
                 await client.query(message)
                 async for item in self._turn(client, trip_id, run_id):
                     yield item
@@ -118,14 +128,38 @@ class Agent:
                 if not finished and self._sessions.get(trip_id) is client:
                     await self.close(trip_id)
 
+    @staticmethod
+    async def _reconnect_mcp(client: ClaudeSDKClient) -> None:
+        """A session warmed up while the MCP servers were still starting (npm run dev, demo-up) may lack their
+        tools; reconnect any that isn't connected before the question, so the turn has them."""
+        try:
+            status = await client.get_mcp_status()
+        except ClaudeSDKError as err:
+            logger.warning("MCP status unavailable: %s", err)
+            return
+        for server in status.get("mcpServers", []):
+            if server.get("name") in tools.REMOTE and server.get("status") != "connected":
+                try:
+                    await client.reconnect_mcp_server(server["name"])
+                except Exception as err:  # noqa: BLE001 - the turn still runs, without that server's tools
+                    logger.warning("MCP server %s unavailable: %s", server["name"], err)
+
     async def _turn(self, client: ClaudeSDKClient, trip_id: str, run_id: str) -> AsyncIterator[Event]:
         started: dict[str, tuple[float, str]] = {}
+        inputs: dict[str, dict[str, Any]] = {}
         streamed = False  # the AssistantMessage then repeats text already sent as deltas
         text_so_far = ""
         async for message in client.receive_response():
             if isinstance(message, StreamEvent):
                 raw = message.event
-                if raw.get("type") == "content_block_start" and raw.get("content_block", {}).get("type") == "text":
+                block = raw.get("content_block", {})
+                if raw.get("type") == "content_block_start" and block.get("type") == "tool_use":
+                    # Shown as soon as the model starts writing the call, not once the call is complete
+                    # (writing present_options' three reasons takes seconds).
+                    name = tools.display_name(block["name"])
+                    started[block["id"]] = (time.perf_counter(), name)
+                    yield event("tool.start", run_id=run_id, call_id=block["id"], name=name, input={})
+                elif raw.get("type") == "content_block_start" and block.get("type") == "text":
                     # Text blocks on either side of a tool call would otherwise run together.
                     if text_so_far and not text_so_far.endswith("\n"):
                         text_so_far += "\n\n"
@@ -139,8 +173,11 @@ class Agent:
                 for block in message.content:
                     if isinstance(block, ToolUseBlock):
                         name = tools.display_name(block.name)
-                        started[block.id] = (time.perf_counter(), name)
-                        yield event("tool.start", run_id=run_id, call_id=block.id, name=name, input=block.input)
+                        inputs[block.id] = block.input
+                        first = block.id not in started  # not streamed (partial messages off)
+                        started[block.id] = (time.perf_counter(), name)  # the call runs from here: time it
+                        if first:
+                            yield event("tool.start", run_id=run_id, call_id=block.id, name=name, input=block.input)
                     elif isinstance(block, TextBlock) and not streamed:
                         text_so_far += block.text
                         yield event("message.delta", text=block.text)
@@ -149,14 +186,17 @@ class Agent:
                 for block in message.content:
                     if isinstance(block, ToolResultBlock) and block.tool_use_id in started:
                         t0, name = started.pop(block.tool_use_id)
+                        summary, detail = _summary(block.content, bool(block.is_error))
                         yield event(
                             "tool.end",
                             run_id=run_id,
                             call_id=block.tool_use_id,
                             name=name,
                             ok=not block.is_error,
-                            summary=_summary(block.content),
+                            summary=summary,
                             ms=round((time.perf_counter() - t0) * 1000),
+                            input=inputs.pop(block.tool_use_id, {}),  # for agent_events (§8.1)
+                            detail=detail,
                         )
                         if name == "present_options" and (options := tools.shown.pop(trip_id, None)):
                             yield event("options", run_id=run_id, options=options)

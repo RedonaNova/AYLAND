@@ -113,3 +113,10 @@ def test_the_cli_session_is_isolated_from_the_developers_account() -> None:
     assert CLI_ENV["ENABLE_CLAUDEAI_MCP_SERVERS"] == "false"
     assert CLI_ENV["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] == "1"
     assert CLI_ENV["ENABLE_TOOL_SEARCH"] == "false"
+
+
+def test_a_slot_is_matched_as_a_time_not_as_a_string() -> None:
+    hanoi = tools._slot_time("2026-10-05T15:00:00+07:00")
+    assert tools._slot_time("2026-10-05T08:00:00Z") == hanoi  # the same moment in UTC
+    assert tools._slot_time("2026-10-05T15:00+07:00") == hanoi  # no seconds
+    assert tools._slot_time("after lunch") is None
