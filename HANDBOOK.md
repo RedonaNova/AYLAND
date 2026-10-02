@@ -487,7 +487,7 @@ Times are **hours from kickoff (H0)** and assume a build window of about 24 hour
 | **M5** Voice and interpreter | H15 to H19 | The magic moment works by voice; the interpreter round trip mn ⇄ en works |
 | **M6** Demo hardening | H19 to H24 | Feature freeze at H20, 3 rehearsals, backup video, submission done |
 
-Tick a box in the same PR that finishes the task. Task IDs (M2-B1 and so on) go in branch names and PR titles.
+Tick a box only after the task's tests pass (offline first, then live, which spends Novelsoft credit and Claude usage); until then mark it *built*. Task IDs (M2-B1 and so on) go in branch names and PR titles.
 
 > **Live slice (2026-10-02).** Live mode (demo controls → Live) runs on the real backend: Claude through the CLI login with `get_trip` and `get_budget_status` reading MongoDB, chat stored in `messages`, tool calls in `agent_events`, the rain nudge on the trip event stream, Anir for the mic, tsuurAI for Mongolian speech and Orchu for the interpreter. Options, proposals and booking still need M2–M4; until then the full magic moment runs in Mock mode. Measured: first rain question about 14 s (mostly thinking), follow-ups about 4 s.
 >
@@ -506,13 +506,13 @@ Tick a box in the same PR that finishes the task. Task IDs (M2-B1 and so on) go 
 
 ### M1: Walking skeleton (H2 to H5)
 
-- [x] **M1-A1** FastAPI app with `POST /api/chat` streaming a Claude reply (`message.delta`, `message.done`). System prompt v0 covers the persona, Mongolian and the rules in §5.4.
-- [x] **M1-A2** Store chat turns in `messages`.
+- [ ] **M1-A1** FastAPI app with `POST /api/chat` streaming a Claude reply (`message.delta`, `message.done`). System prompt v0 covers the persona, Mongolian and the rules in §5.4. *(built 2026-10-02; tick after the offline and live tests pass)*
+- [ ] **M1-A2** Store chat turns in `messages`. *(built 2026-10-02; tick after the offline and live tests pass)*
 - [ ] **M1-B1** `ayland/db`: client, Pydantic models for §8.1, small repository functions.
-- [x] **M1-B2** Seed data (`data/seed/hanoi.json`, `npm run seed`): the demo user; the Hanoi trip (today = the seed date, an outdoor-heavy plan, hotel in the Old Quarter); 25 to 30 realistic offers with a good share of indoor, rainy-day and budget options; and the merchants. `scripts/seed.py` must be idempotent so it doubles as the demo reset.
-- [x] **M1-C1** Mobile-first chat screen that reads the SSE stream, plus a trip panel from `GET /api/trips/{id}`.
+- [ ] **M1-B2** Seed data (`data/seed/hanoi.json`, `npm run seed`): the demo user; the Hanoi trip (today = the seed date, an outdoor-heavy plan, hotel in the Old Quarter); 25 to 30 realistic offers with a good share of indoor, rainy-day and budget options; and the merchants. `scripts/seed.py` must be idempotent so it doubles as the demo reset. *(built 2026-10-02; tick after the offline and live tests pass)*
+- [ ] **M1-C1** Mobile-first chat screen that reads the SSE stream, plus a trip panel from `GET /api/trips/{id}`. *(built 2026-10-02; tick after the offline and live tests pass)*
 - [ ] **M1-D1** Booking Agent skeleton that serves its Agent Card and a `ping` skill, plus an A2A client helper in the orchestrator that calls it.
-- [x] **M1-D2** Voice adapter interface (`transcribe(audio, lang)`, `speak(text, lang)`) using the provider chosen in D4, exposed as `/api/voice/*`.
+- [ ] **M1-D2** Voice adapter interface (`transcribe(audio, lang)`, `speak(text, lang)`) using the provider chosen in D4, exposed as `/api/voice/*`. *(built 2026-10-02; tick after the offline and live tests pass)*
 
 ### M2: Tools via MCP (H5 to H9)
 
@@ -520,7 +520,7 @@ Tick a box in the same PR that finishes the task. Task IDs (M2-B1 and so on) go 
 - [ ] **M2-B2** MCP `merchant`: `search_offers` (filters plus a 2dsphere "near" query), `get_offer`, `check_availability`.
 - [ ] **M2-B3** Exercise both servers in the MCP Inspector and add smoke tests in `backend/tests`.
 - [ ] **M2-A1** The orchestrator loads the MCP tools (Tool Runner plus MCP helpers) and the local tools `get_trip` and `get_budget_status`.
-- [x] **M2-A2** Emit `tool.start` and `tool.end` and write `agent_events`.
+- [ ] **M2-A2** Emit `tool.start` and `tool.end` and write `agent_events`. *(built 2026-10-02; tick after the offline and live tests pass)*
 - [ ] **M2-A3** Prompt v1: compare options, show per-person and total cost, respect the budget, end with a next step.
 - [ ] **M2-C1** Trace panel: a live list of agent steps with status and timings.
 - [ ] **M2-C2** Option cards: title, time, travel time, cost, and a one-line reason.
@@ -717,4 +717,4 @@ The MCP servers and A2A agents join `npm run dev` in M2; update this section in 
 | 2026-09-30 | v1.1 | Branch model `main` / `demo` / `dev` (§11); web demo v0 with mock orchestrator and e2e checks (§7, §10, §12); §8.4 v1.1 contract additions |
 | 2026-10-01 | v1.2 | Novelsoft OyuLLM / Anir / tsuurAI (D1, D4); Claude through the Claude Code CLI, no API key (M0-3); hackathon facts (§6.1); backend scaffold, `.env.example` and spikes (M0-6, §12) |
 | 2026-10-01 | v1.3 | Interpreter is Mongolian ⇄ English for now (any destination language later); Orchu for translation |
-| 2026-10-02 | v1.4 | M1 live slice: chat on Claude + MongoDB tools, seed, voice and interpreter endpoints, Mock/Live switch, `/api` proxy, `demo-up.ps1`; M1-A1, A2, B2, C1, D2 and M2-A2 ticked |
+| 2026-10-02 | v1.4 | M1 live slice: chat on Claude + MongoDB tools, seed, voice and interpreter endpoints, Mock/Live switch, `/api` proxy, `demo-up.ps1`; M1-A1, A2, B2, C1, D2 and M2-A2 built, ticked only after tests |
