@@ -8,7 +8,7 @@ This handbook is our single source of truth for **what** we build, **how** the p
 
 - **First time here?** Read §1 to §4 (about 10 minutes).
 - **While coding,** keep §7 (repo layout), §8 (contracts) and §10 (roadmap) open.
-- **Status:** v1.4 draft (2026-10-02). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
+- **Status:** v1.5 draft (2026-10-02). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
 
 ---
 
@@ -267,7 +267,7 @@ AYLAND/
 ├── README.md                 ← short intro + quick start
 ├── .env.example              ← every env var with no secrets (M0-6)
 ├── package.json              ← root scripts: setup, dev, seed, check (M0-6)
-├── demo-up.ps1               ← runs the live demo on this PC (API :8100, web :3100, tunnel)
+├── demo-up.ps1               ← runs the live demo on this PC (booking :8401, API :8100, web :3100, tunnel)
 ├── docs/
 │   ├── concept/Morgensonne.docx   ← original concept (Mongolian)
 │   ├── spikes/               ← M0-4 / M0-5 results (audio stays local)
@@ -399,7 +399,9 @@ agent_events { _id, trip_id, run_id, type: "tool" | "a2a" | "plan" | "booking" |
 
 ### 8.3 A2A agents
 
-**AYLAND Booking Agent** (port 8301) publishes an Agent Card with these skills:
+**Calling a skill.** A2A routes messages, not skills, so every AYLAND request carries one data part `{"skill": "<id>", ...inputs}` and the agent answers with one data message (the A2A "immediate response"). Both sides use `ayland/a2a_agents/skills.py`; the orchestrator calls `ayland/orchestrator/a2a.py` → `call_skill(base_url, skill, inputs)`. Agents speak JSON-RPC at `/a2a/jsonrpc` and serve their card at `/.well-known/agent-card.json` (a2a-sdk 1.x, A2A protocol 1.0).
+
+**AYLAND Booking Agent** (port 8301) publishes an Agent Card with these skills (M1 ships `ping`; the rest arrive in M4):
 
 | Skill | Input | Output |
 |---|---|---|
@@ -508,10 +510,10 @@ Tick a box only after the task's tests pass (offline first, then live, which spe
 
 - [ ] **M1-A1** FastAPI app with `POST /api/chat` streaming a Claude reply (`message.delta`, `message.done`). System prompt v0 covers the persona, Mongolian and the rules in §5.4. *(built 2026-10-02; tick after the offline and live tests pass)*
 - [ ] **M1-A2** Store chat turns in `messages`. *(built 2026-10-02; tick after the offline and live tests pass)*
-- [ ] **M1-B1** `ayland/db`: client, Pydantic models for §8.1, small repository functions.
+- [ ] **M1-B1** `ayland/db`: client, Pydantic models for §8.1, small repository functions. *(built 2026-10-02; tick after the offline and live tests pass)*
 - [ ] **M1-B2** Seed data (`data/seed/hanoi.json`, `npm run seed`): the demo user; the Hanoi trip (today = the seed date, an outdoor-heavy plan, hotel in the Old Quarter); 25 to 30 realistic offers with a good share of indoor, rainy-day and budget options; and the merchants. `scripts/seed.py` must be idempotent so it doubles as the demo reset. *(built 2026-10-02; tick after the offline and live tests pass)*
 - [ ] **M1-C1** Mobile-first chat screen that reads the SSE stream, plus a trip panel from `GET /api/trips/{id}`. *(built 2026-10-02; tick after the offline and live tests pass)*
-- [ ] **M1-D1** Booking Agent skeleton that serves its Agent Card and a `ping` skill, plus an A2A client helper in the orchestrator that calls it.
+- [ ] **M1-D1** Booking Agent skeleton that serves its Agent Card and a `ping` skill, plus an A2A client helper in the orchestrator that calls it. *(built 2026-10-02; tick after the offline and live tests pass)*
 - [ ] **M1-D2** Voice adapter interface (`transcribe(audio, lang)`, `speak(text, lang)`) using the provider chosen in D4, exposed as `/api/voice/*`. *(built 2026-10-02; tick after the offline and live tests pass)*
 
 ### M2: Tools via MCP (H5 to H9)
@@ -635,13 +637,13 @@ cp .env.example .env     # fill in MONGODB_URI and OYU_API_KEY (never paste keys
 npm run setup            # root tools, frontend (npm) and backend (uv sync)
 npm run check            # MongoDB, Claude (CLI), OyuLLM, tsuurAI → Anir round trip
 npm run seed             # load the Hanoi demo into MongoDB (also the demo reset)
-npm run dev              # web on :3000 + orchestrator API on :8000; choose Mock or Live in the demo controls
+npm run dev              # web :3000 + orchestrator :8000 + Booking Agent :8301; choose Mock or Live in the demo controls
 npm test                 # backend unit tests;  npm run test:e2e for the browser golden path
 ```
 
-The MCP servers and A2A agents join `npm run dev` in M2; update this section in that PR.
+The MCP servers and the Interpreter Agent join `npm run dev` in M2; update this section in that PR.
 
-**Live demo on this PC:** from a checkout of `demo` with its own `.env`, `powershell -ExecutionPolicy Bypass -File demo-up.ps1 -Build` starts the API on :8100, the web app on :3100 and a Cloudflare quick tunnel, and prints the public URL. `-KeepTunnel` restarts the app without changing the URL; `-Stop` stops everything. Frontend build settings: `AYLAND_API_ORIGIN` (where `/api` goes, default `http://localhost:8000`) and `NEXT_PUBLIC_AYLAND_MODE` (`live` to start in live mode).
+**Live demo on this PC:** from a checkout of `demo` with its own `.env`, `powershell -ExecutionPolicy Bypass -File demo-up.ps1 -Build` starts the Booking Agent on :8401, the API on :8100, the web app on :3100 and a Cloudflare quick tunnel, and prints the public URL. `-KeepTunnel` restarts the app without changing the URL; `-Stop` stops everything. Frontend build settings: `AYLAND_API_ORIGIN` (where `/api` goes, default `http://localhost:8000`) and `NEXT_PUBLIC_AYLAND_MODE` (`live` to start in live mode).
 
 **Environment variables:** see [`.env.example`](.env.example). Secrets: `MONGODB_URI` and `OYU_API_KEY`. Claude needs no key (`CLAUDE_CLI_PATH` only if auto-detection fails). Only `backend/ayland/config.py` reads them.
 
@@ -718,3 +720,4 @@ The MCP servers and A2A agents join `npm run dev` in M2; update this section in 
 | 2026-10-01 | v1.2 | Novelsoft OyuLLM / Anir / tsuurAI (D1, D4); Claude through the Claude Code CLI, no API key (M0-3); hackathon facts (§6.1); backend scaffold, `.env.example` and spikes (M0-6, §12) |
 | 2026-10-01 | v1.3 | Interpreter is Mongolian ⇄ English for now (any destination language later); Orchu for translation |
 | 2026-10-02 | v1.4 | M1 live slice: chat on Claude + MongoDB tools, seed, voice and interpreter endpoints, Mock/Live switch, `/api` proxy, `demo-up.ps1`; M1-A1, A2, B2, C1, D2 and M2-A2 built, ticked only after tests |
+| 2026-10-02 | v1.5 | M1-B1 (§8.1 Pydantic models, validated seed writes) and M1-D1 (Booking Agent card + `ping`, orchestrator A2A client) built; §8.3 skill-call convention |
