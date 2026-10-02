@@ -3,7 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { mn } from "@/i18n/mn";
 import { A2A_AGENTS, A2A_SKILL_LABELS, type NodeId, toolMeta } from "./agents";
-import { api } from "./api";
+import { type ApiMode, getApi, type Health } from "./api";
+import { useApiMode } from "./mode";
 import { TRIP_ID } from "./mock/seed";
 import type { A2AStatus, AgentEvent, Booking, Lang, NudgeAction, Proposal, TripOption, TripView } from "./types";
 
@@ -58,6 +59,8 @@ export type Phase = "start" | "options" | "pending" | "booked";
 
 interface Store {
   view: TripView | null;
+  /** Why the trip couldn't load (live mode with the backend or MongoDB down). */
+  tripError: string | null;
   items: ChatItem[];
   log: LogEntry[];
   busy: boolean;
@@ -75,12 +78,19 @@ interface Store {
   reset: () => Promise<void>;
   interpret: (text: string, source: Lang, target: Lang) => Promise<{ text: string; pronunciation_hint?: string }>;
   nextVoiceLine: () => string;
+  /** "mock" runs the scripted orchestrator in the browser; "live" talks to the FastAPI backend. */
+  mode: ApiMode;
+  setMode: (mode: ApiMode) => void;
+  transcribe: (audio: Blob, lang: Lang) => Promise<string>;
+  speak: (text: string, lang: Lang) => Promise<Blob>;
+  health: () => Promise<Health>;
 }
 
 const StoreContext = createContext<Store | null>(null);
 
 let seq = 0;
 const uid = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(seq++).toString(36)}`;
+const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 const A2A_STEP: Record<A2AStatus, { status: StepStatus; summary: string }> = {
   submitted: { status: "running", summary: "Task submitted" },
@@ -90,7 +100,8 @@ const A2A_STEP: Record<A2AStatus, { status: StepStatus; summary: string }> = {
 };
 
 export function DemoProvider({ children }: { children: React.ReactNode }) {
-  const [view, setView] = useState<TripView | null>(null);
+  // Trip state is tagged with the mode it came from, so a mode switch never shows the other mode's data.
+  const [loaded, setLoaded] = useState<Partial<Record<ApiMode, { view: TripView | null; error: string | null }>>>({});
   const [items, setItems] = useState<ChatItem[]>([]);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [highlight, setHighlight] = useState<string[]>([]);
@@ -98,10 +109,22 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   const [interpreting, setInterpreting] = useState(false);
   const [draft, setDraft] = useState("");
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // Bumped on reset so a run that is still streaming stops touching the fresh chat.
+  // Bumped on reset or mode switch so a run that is still streaming stops touching the fresh chat.
   const epoch = useRef(0);
+  const [mode, setStoredMode] = useApiMode();
+  const api = useMemo(() => getApi(mode), [mode]);
+  const current = loaded[mode];
+  const view = current?.view ?? null;
+  const tripError = current?.error ?? null;
 
-  const refreshTrip = useCallback(async () => setView(await api.getTrip(TRIP_ID)), []);
+  const loadTrip = useCallback(
+    () =>
+      api.getTrip(TRIP_ID).then(
+        (trip) => setLoaded((prev) => ({ ...prev, [mode]: { view: trip, error: null } })),
+        (err: unknown) => setLoaded((prev) => ({ ...prev, [mode]: { view: null, error: errorMessage(err) } })),
+      ),
+    [api, mode],
+  );
 
   const addLog = useCallback((entry: Omit<LogEntry, "id" | "ts">) => {
     setLog((prev) => [{ ...entry, id: uid("log"), ts: Date.now() }, ...prev].slice(0, 200));
@@ -186,7 +209,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
           addLog({ type: "booking", name: "bookings.insert", node: "mongodb", summary: `Confirmed ${event.data.booking.confirmation_code}`, ok: true });
           break;
         case "plan.updated":
-          void refreshTrip();
+          void loadTrip();
           setMapOptions(null);
           setHighlight(event.data.changed_item_ids);
           clearTimeout(highlightTimer.current);
@@ -200,7 +223,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
           break;
       }
     },
-    [addLog, patchAssistant, refreshTrip, setProposalState],
+    [addLog, loadTrip, patchAssistant, setProposalState],
   );
 
   const run = useCallback(
@@ -214,7 +237,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
           apply(id, event);
         }
       } catch (err) {
-        apply(id, { type: "error", data: { message: err instanceof Error ? err.message : String(err) } });
+        apply(id, { type: "error", data: { message: errorMessage(err) } });
       }
       if (born !== epoch.current) return;
       patchAssistant(id, (it) => (it.status === "done" || it.status === "error" ? it : { ...it, status: "done", finishedAt: Date.now() }));
@@ -236,7 +259,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
       setItems((prev) => [...prev, { id: uid("u"), kind: "user", text: message, via }]);
       await run(api.chat({ trip_id: TRIP_ID, message }));
     },
-    [run],
+    [api, run],
   );
 
   const approve = useCallback(
@@ -244,7 +267,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
       setProposalState(proposalId, "approving");
       await run(api.approveProposal(proposalId, "tap"));
     },
-    [run, setProposalState],
+    [api, run, setProposalState],
   );
 
   const reject = useCallback(
@@ -258,7 +281,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
         { id, kind: "assistant", text: mn.approval.rejectedReply, status: "done", steps: [], startedAt: Date.now(), finishedAt: Date.now() },
       ]);
     },
-    [setProposalState],
+    [api, setProposalState],
   );
 
   const resolveNudge = useCallback(
@@ -272,20 +295,37 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   const setWeather = useCallback(
     async (weather: "rain" | "clear") => {
       await api.demoScenario(weather);
-      await refreshTrip();
+      await loadTrip();
     },
-    [refreshTrip],
+    [api, loadTrip],
   );
 
-  const reset = useCallback(async () => {
+  const clearChat = useCallback(() => {
     epoch.current += 1;
-    await api.demoReset();
     setItems([]);
     setLog([]);
     setHighlight([]);
     setMapOptions(null);
     setDraft("");
   }, []);
+
+  const reset = useCallback(async () => {
+    epoch.current += 1; // stop a streaming run now, not after the request
+    await api.demoReset();
+    clearChat();
+  }, [api, clearChat]);
+
+  const setMode = useCallback(
+    (next: ApiMode) => {
+      clearChat();
+      setStoredMode(next);
+    },
+    [clearChat, setStoredMode],
+  );
+
+  const transcribe = useCallback(async (audio: Blob, lang: Lang) => (await api.transcribe(audio, lang)).text, [api]);
+  const speak = useCallback((text: string, lang: Lang) => api.speak(text, lang), [api]);
+  const health = useCallback(() => api.health(), [api]);
 
   const interpret = useCallback(
     async (text: string, source: Lang, target: Lang) => {
@@ -298,7 +338,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
         setInterpreting(false);
       }
     },
-    [addLog],
+    [addLog, api],
   );
 
   const phase: Phase = useMemo(() => {
@@ -321,21 +361,22 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
     return [...nodes];
   }, [items, interpreting]);
 
-  // Calls the api directly rather than refreshTrip(): react-hooks/set-state-in-effect can't see past its await.
+  // loadTrip sets state in a promise callback, never synchronously, as react-hooks/set-state-in-effect requires.
   useEffect(() => {
-    void api.getTrip(TRIP_ID).then(setView);
+    void loadTrip();
     return api.tripEvents(TRIP_ID, (event) => {
       if (event.type === "nudge") {
         const { text, detail, actions } = event.data;
         setItems((prev) => [...prev, { id: uid("n"), kind: "nudge", text, detail, actions, resolved: false }]);
         addLog({ type: "nudge", name: "nudge.rain", node: "orchestrator", summary: text, ok: true });
       }
-      void api.getTrip(TRIP_ID).then(setView);
+      void loadTrip();
     });
-  }, [addLog]);
+  }, [addLog, api, loadTrip]);
 
   const value: Store = {
     view,
+    tripError,
     items,
     log,
     busy,
@@ -353,6 +394,11 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
     reset,
     interpret,
     nextVoiceLine,
+    mode,
+    setMode,
+    transcribe,
+    speak,
+    health,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

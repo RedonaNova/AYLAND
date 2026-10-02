@@ -6,6 +6,8 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { mn } from "@/i18n/mn";
 import { cn } from "@/lib/cn";
 import { hhmm } from "@/lib/format";
+import { type Recording, startRecording } from "@/lib/live/recorder";
+import { canRecognize, type Listening, playAudio, recognize, speakInBrowser } from "@/lib/live/speech";
 import { SCRIPT } from "@/lib/mock/phrasebook";
 import { useStore } from "@/lib/store";
 import type { Lang } from "@/lib/types";
@@ -27,21 +29,8 @@ const LANG: Record<Side, { from: Lang; to: Lang }> = {
 const WORD_MS = 140;
 const LEAD_MS = 500;
 
-/** Browser TTS as a stand-in for the voice adapter (M1-D2); only speaks if a matching voice exists. */
-function speak(text: string, lang: Lang) {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-  const voice = window.speechSynthesis.getVoices().find((v) => v.lang.toLowerCase().startsWith(lang));
-  if (!voice) return;
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.voice = voice;
-  utterance.lang = voice.lang;
-  utterance.rate = 0.95;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utterance);
-}
-
 export default function InterpreterPage() {
-  const { interpret, view } = useStore();
+  const { interpret, view, mode, transcribe, speak } = useStore();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [listening, setListening] = useState<Side | null>(null);
   const [partial, setPartial] = useState("");
@@ -50,15 +39,34 @@ export default function InterpreterPage() {
   const [showing, setShowing] = useState(false);
   const [typed, setTyped] = useState("");
   const [typedSide, setTypedSide] = useState<Side>("me");
+  const [voiceError, setVoiceError] = useState("");
   const counters = useRef<Record<Side, number>>({ me: 0, them: 0 });
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const recording = useRef<Recording | null>(null);
+  const starting = useRef(false);
+  const recognition = useRef<Listening | null>(null);
 
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  useEffect(
+    () => () => {
+      timers.current.forEach(clearTimeout);
+      recording.current?.cancel();
+      recognition.current?.stop();
+    },
+    [],
+  );
+
+  /** Mongolian out through tsuurAI in live mode; the browser's voice otherwise (English, or mock). */
+  async function voiceOut(text: string, lang: Lang) {
+    if (lang === "mn" && mode === "live") await playAudio(await speak(text, "mn"));
+    else speakInBrowser(text, lang);
+  }
 
   const booked = view?.trip.days
     .flatMap((d) => d.items)
     .find((i) => i.status === "booked" && i.source === "agent");
   const latest = turns.at(-1);
+  // TalkButton keeps the active side pressable, so it can stop its own recording.
+  const busy = !!listening || translating;
 
   async function translate(side: Side, text: string) {
     setTranslating(true);
@@ -66,14 +74,79 @@ export default function InterpreterPage() {
       const { from, to } = LANG[side];
       const result = await interpret(text, from, to);
       setTurns((prev) => [...prev, { id: prev.length + 1, side, source: text, translated: result.text, hint: result.pronunciation_hint }]);
-      if (sound) speak(result.text, to);
+      if (sound) await voiceOut(result.text, to).catch(() => undefined);
+    } catch {
+      setVoiceError(mn.live.sttFailed);
     } finally {
       setTranslating(false);
     }
   }
 
+  /** Live, Mongolian side: record, Anir, translate. Pressing again stops the recording. */
+  async function liveMongolian() {
+    if (recording.current) {
+      const clip = recording.current;
+      recording.current = null;
+      setListening(null);
+      setTranslating(true);
+      try {
+        const text = await transcribe(await clip.stop(), "mn");
+        if (text) await translate("me", text);
+        else setVoiceError(mn.live.sttFailed);
+      } catch {
+        setVoiceError(mn.live.sttFailed);
+      } finally {
+        setTranslating(false);
+      }
+      return;
+    }
+    if (starting.current) return; // a second tap while the mic prompt is open
+    starting.current = true;
+    try {
+      recording.current = await startRecording();
+      setPartial("");
+      setListening("me");
+    } catch {
+      setVoiceError(mn.live.micDenied);
+    } finally {
+      starting.current = false;
+    }
+  }
+
+  /** Live, English side: the browser recognizes speech (with partials), then we translate. */
+  async function liveEnglish() {
+    if (recognition.current) {
+      recognition.current.stop();
+      return;
+    }
+    if (!canRecognize()) {
+      setVoiceError(mn.live.noRecognition);
+      return;
+    }
+    setPartial("");
+    setListening("them");
+    try {
+      recognition.current = recognize("en", setPartial);
+      const text = await recognition.current.result;
+      setListening(null);
+      if (text) await translate("them", text);
+    } catch {
+      setListening(null);
+      setVoiceError(mn.live.sttFailed);
+    } finally {
+      recognition.current = null;
+    }
+  }
+
   function listen(side: Side) {
-    if (listening || translating) return;
+    setVoiceError("");
+    if (mode === "live") {
+      if (translating || (listening && listening !== side)) return;
+      if (side === "me") void liveMongolian();
+      else void liveEnglish();
+      return;
+    }
+    if (busy) return;
     const lines = SCRIPT[LANG[side].from];
     const line = lines[counters.current[side] % lines.length];
     counters.current[side] += 1;
@@ -117,7 +190,14 @@ export default function InterpreterPage() {
       </header>
 
       <div className="scrollbar-thin mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col gap-4 overflow-y-auto px-4 py-5">
-        <Stage latest={latest} listening={listening} partial={partial} translating={translating} onShow={() => setShowing(true)} onPlay={(t) => speak(t.translated, LANG[t.side].to)} />
+        <Stage
+          latest={latest}
+          listening={listening}
+          partial={partial}
+          translating={translating}
+          onShow={() => setShowing(true)}
+          onPlay={(t) => void voiceOut(t.translated, LANG[t.side].to)}
+        />
 
         {turns.length > 1 && (
           <ol className="space-y-2">
@@ -141,9 +221,10 @@ export default function InterpreterPage() {
 
       <div className="mx-auto w-full max-w-4xl px-4 pb-4">
         <div className="grid grid-cols-2 gap-3">
-          <TalkButton side="me" active={listening === "me"} disabled={!!listening || translating} onClick={() => listen("me")} />
-          <TalkButton side="them" active={listening === "them"} disabled={!!listening || translating} onClick={() => listen("them")} />
+          <TalkButton side="me" active={listening === "me"} disabled={busy} onClick={() => listen("me")} />
+          <TalkButton side="them" active={listening === "them"} disabled={busy} onClick={() => listen("them")} />
         </div>
+        {voiceError && <p className="mt-2 text-center text-xs text-rose-400">{voiceError}</p>}
         <form
           className="surface mt-3 flex items-center gap-2 rounded-2xl p-1.5 pl-2"
           onSubmit={(e) => {

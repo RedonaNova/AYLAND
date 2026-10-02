@@ -9,8 +9,8 @@ import { Timeline } from "./Timeline";
 import { WeatherCard } from "./WeatherCard";
 
 export function TodayPanel() {
-  const { view, highlight, mapOptions } = useStore();
-  if (!view) return <PanelSkeleton />;
+  const { view, tripError, highlight, mapOptions } = useStore();
+  if (!view) return <PanelSkeleton error={tripError} />;
 
   const today = view.now.slice(0, 10);
   const dayNumber = tripDay(view);
@@ -51,9 +51,10 @@ export function TodayPanel() {
   );
 }
 
-function PanelSkeleton() {
+function PanelSkeleton({ error }: { error: string | null }) {
   return (
     <div className="flex flex-col gap-3">
+      {error && <p className="rounded-2xl bg-rose-400/10 p-3 text-xs text-rose-400 ring-1 ring-rose-400/20">{error}</p>}
       {[64, 128, 240, 300].map((h) => (
         <div key={h} className="animate-pulse rounded-2xl bg-white/[0.04]" style={{ height: h }} />
       ))}

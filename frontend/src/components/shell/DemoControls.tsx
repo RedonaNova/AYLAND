@@ -4,20 +4,77 @@ import { CloudRain, CloudSun, FlaskConical, RotateCcw, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { mn } from "@/i18n/mn";
+import { type ApiMode, getApi, type Health } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useStore } from "@/lib/store";
 
+/** Mock (scripted, always works) or Live (FastAPI: MongoDB, Claude, Novelsoft). Live is checked first. */
+function ModeSwitch() {
+  const { mode, setMode } = useStore();
+  const [status, setStatus] = useState<{ checking: boolean; health?: Health }>({ checking: false });
+
+  const choose = async (next: ApiMode) => {
+    if (next === mode) return;
+    if (next === "mock") {
+      setStatus({ checking: false });
+      setMode("mock");
+      return;
+    }
+    setStatus({ checking: true });
+    const health = await getApi("live").health();
+    setStatus({ checking: false, health });
+    if (health.ok) setMode("live");
+  };
+
+  const note = status.checking ? mn.demo.checking : status.health?.detail;
+  const failed = status.health?.ok === false;
+
+  return (
+    <div className="mb-2">
+      <div className="grid grid-cols-2 rounded-xl bg-ink-950/70 p-1 text-xs font-medium">
+        {(["mock", "live"] as const).map((m) => {
+          const active = mode === m;
+          return (
+            <button
+              key={m}
+              type="button"
+              onClick={() => void choose(m)}
+              aria-pressed={active}
+              className={cn("relative flex items-center justify-center gap-1.5 rounded-lg py-1.5 transition-colors", active ? "text-fg" : "text-fg-subtle hover:text-fg-muted")}
+            >
+              {active && (
+                <motion.span
+                  layoutId="demo-mode-thumb"
+                  className={cn("absolute inset-0 rounded-lg", m === "live" ? "bg-mint-400/15" : "bg-white/[0.07]")}
+                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                />
+              )}
+              {m === "live" && <span className={cn("relative size-1.5 rounded-full", active ? "bg-mint-400" : "bg-fg-subtle")} />}
+              <span className="relative">{m === "live" ? mn.demo.live : mn.demo.mock}</span>
+            </button>
+          );
+        })}
+      </div>
+      {note && <p className={cn("mt-1 px-1 text-[10px] leading-snug", failed ? "text-rose-400" : "text-fg-subtle")}>{note}</p>}
+    </div>
+  );
+}
+
 /** DEMO_MODE controls (HANDBOOK §3, §8.4 /api/demo/*). Alt+R rain, Alt+C clear, Alt+N reset. */
 export function DemoControls({ className }: { className?: string }) {
-  const { view, setWeather, reset } = useStore();
+  const { view, setWeather, reset, mode } = useStore();
   const raining = view?.weather.condition === "rain";
+  const live = mode === "live";
 
   return (
     <div className={cn("surface rounded-2xl p-3", className)}>
       <div className="mb-2.5 flex items-center justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">{mn.demo.title}</span>
-        <span className="rounded-full bg-white/5 px-2 py-0.5 font-mono text-[9px] text-fg-subtle">{mn.demo.mockBadge}</span>
+        <span className={cn("rounded-full px-2 py-0.5 font-mono text-[9px]", live ? "bg-mint-400/15 text-mint-400" : "bg-white/5 text-fg-subtle")}>
+          {live ? mn.demo.liveBadge : mn.demo.mockBadge}
+        </span>
       </div>
+      <ModeSwitch />
       <div className="relative grid grid-cols-2 rounded-xl bg-ink-950/70 p-1 text-xs font-medium">
         {(["clear", "rain"] as const).map((w) => {
           const active = (w === "rain") === raining;

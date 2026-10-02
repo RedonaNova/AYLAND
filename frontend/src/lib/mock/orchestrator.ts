@@ -539,6 +539,19 @@ export function createMockOrchestrator(): AylandApi {
       };
     },
 
+    // Voice in mock mode is simulated inside the Composer and the interpreter, so these are never reached.
+    async transcribe() {
+      throw new Error("Speech recognition needs live mode");
+    },
+
+    async speak() {
+      throw new Error("Speech synthesis needs live mode");
+    },
+
+    async health() {
+      return { ok: true, detail: "mock" };
+    },
+
     tripEvents(_tripId, onEvent) {
       listeners.add(onEvent);
       return () => listeners.delete(onEvent);

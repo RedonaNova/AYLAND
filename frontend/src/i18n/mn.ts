@@ -42,6 +42,8 @@ export const mn = {
   chat: {
     placeholder: "AYLAND-аас асуугаарай…",
     listening: "Сонсож байна…",
+    transcribing: "Бичвэр болгож байна…",
+    stopToSend: "Дуусаад товчоо дахин дарна уу",
     thinking: "Бодож байна",
     send: "Илгээх",
     mic: "Дуугаар асуух",
@@ -142,6 +144,18 @@ export const mn = {
     rain: "Бороо",
     reset: "Дахин эхлүүлэх",
     mockBadge: "mock API",
+    liveBadge: "live API",
+    mode: "Горим",
+    mock: "Mock",
+    live: "Live",
+    checking: "Холбогдож байна…",
+  },
+  live: {
+    notYet: "Захиалга live горимд M3–M4-д нэмэгдэнэ. Одоохондоо Mock горимд үзүүлнэ үү.",
+    unreachable: "Backend (порт 8000) ажиллахгүй байна",
+    micDenied: "Микрофонд хандах зөвшөөрөл алга.",
+    sttFailed: "Яриаг танисангүй, дахин оролдоно уу.",
+    noRecognition: "Энэ хөтөч англи яриа танихгүй байна. Бичиж оруулна уу.",
   },
   tripPage: {
     title: "Миний аялал",

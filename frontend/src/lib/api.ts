@@ -1,9 +1,17 @@
-// Typed client for the orchestrator API (HANDBOOK §8.4).
-// Streams are AsyncIterables of the SSE events. Until the FastAPI orchestrator exists (M1-A1),
-// a browser-side mock that emits the same events stands in for it.
+// Typed client for the orchestrator API (HANDBOOK §8.4). Streams are AsyncIterables of the SSE events.
+// Two implementations behind one interface: the in-browser mock (scripted, always works on stage) and
+// the live client for the FastAPI orchestrator (MongoDB, Claude, Novelsoft).
 
+import { createLiveClient } from "./live/client";
 import { createMockOrchestrator } from "./mock/orchestrator";
 import type { AgentEvent, Lang, TripView } from "./types";
+
+export type ApiMode = "mock" | "live";
+
+export interface Health {
+  ok: boolean;
+  detail: string;
+}
 
 export interface AylandApi {
   /** GET /api/trips/{trip_id} */
@@ -22,6 +30,20 @@ export interface AylandApi {
   demoReset(): Promise<void>;
   /** POST /api/demo/scenario (DEMO_MODE only) */
   demoScenario(weather: "rain" | "clear"): Promise<void>;
+  /** POST /api/voice/transcribe: Anir, Mongolian audio → text. */
+  transcribe(audio: Blob, lang: Lang): Promise<{ text: string }>;
+  /** POST /api/voice/speak: tsuurAI, Mongolian text → WAV. */
+  speak(text: string, lang: Lang): Promise<Blob>;
+  /** GET /api/health, summarized. */
+  health(): Promise<Health>;
 }
 
-export const api: AylandApi = createMockOrchestrator();
+export const DEFAULT_MODE: ApiMode = process.env.NEXT_PUBLIC_AYLAND_MODE === "live" ? "live" : "mock";
+
+const clients: Partial<Record<ApiMode, AylandApi>> = {};
+
+/** One instance per mode, so switching back keeps the mock's state. */
+export function getApi(mode: ApiMode): AylandApi {
+  clients[mode] ??= mode === "live" ? createLiveClient("/api") : createMockOrchestrator();
+  return clients[mode];
+}
