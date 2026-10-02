@@ -8,7 +8,7 @@ This handbook is our single source of truth for **what** we build, **how** the p
 
 - **First time here?** Read §1 to §4 (about 10 minutes).
 - **While coding,** keep §7 (repo layout), §8 (contracts) and §10 (roadmap) open.
-- **Status:** v1.8 draft (2026-10-03). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
+- **Status:** v1.9 draft (2026-10-03). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
 
 ---
 
@@ -484,6 +484,16 @@ Fill in names at kickoff. One owner per workstream; everyone helps at integratio
 - **Three people?** Split D: A takes the Booking Agent, B takes the Interpreter Agent and voice adapters.
 - **Five people?** Give Demo and pitch a dedicated owner from M3 onward.
 
+**Who edits which folders** (three people; this is what keeps parallel work conflict-free, see §11):
+
+| Workstream | Folders it owns | What is left for it (from 2026-10-03) |
+|---|---|---|
+| **A: Agent core + Booking Agent** | `backend/ayland/orchestrator/`, `backend/ayland/a2a_agents/booking/`, `backend/ayland/budget.py` | M3 live check; **M4-D1** hold/confirm/cancel; **M4-A1** approve endpoint (A2A confirm, plan → booked, budget, events, Mongolian summary); M5-A1 "time to leave" nudge |
+| **B: Data, tools, voice, OyuLLM** | `backend/ayland/mcp_servers/`, `backend/ayland/db/`, `data/`, `backend/ayland/voice/`, `backend/ayland/llm/`, `backend/ayland/a2a_agents/interpreter/` | Voice hand test (M1-D2); MCP Inspector (M2-B3); **D1: a real job for OyuLLM** (required tech, 10% of judging; not used in the live flow yet); M3-B2 vector search and M3-B3 memories *(Should)* |
+| **C: Experience + demo** | `frontend/`, `docs/`, `demo-up.ps1` | Live approval card (M4-C1, with A); design pass with `frontend-design`; Vercel deploy (repo owner); M6 demo script, deck, backup video |
+
+Shared files, edited in small separate commits and announced in chat: `HANDBOOK.md`, `package.json`, `.env.example`, `backend/ayland/db/models.py` and `frontend/src/lib/types.ts` (the §8 contracts), `backend/ayland/orchestrator/tools.py` (A and B both add tools).
+
 ---
 
 ## 10. Roadmap: milestones and tasks
@@ -606,12 +616,27 @@ Tick a box only after the task's tests pass (offline first, then live, which spe
   # ...small commits...
   git pull --rebase origin dev
   git push -u origin feat/M2-B1-weather-tool
-  # open a PR into dev; a teammate glances at it (10 minutes max); squash-merge
+  # open a PR into dev (the template asks for task, tests, handbook); CI must be green;
+  # a teammate glances at it (10 minutes max); "Rebase and merge" keeps the scoped commits
   ```
 - **Promotion** (lead, at each milestone exit): `git switch demo && git merge --ff-only dev && git push`, then after the demo check `git switch main && git merge --ff-only demo && git tag vX && git push --follow-tags`.
 - **Branches live less than 3 hours.** Merge small and often.
 - **Never** force-push `main`, `demo` or `dev`, and **never** commit `.env` or any key. **The repo is public.**
 - **Contract changes (§8)** update this handbook in the same PR, with a heads-up in team chat.
+
+### Working in parallel
+
+Three people (and their Claude Code agents) in one repo on one day. What keeps us out of each other's way:
+
+1. **Stay in your folders** (table in §9). Most conflicts come from two people editing one file; folder ownership makes that rare. Need a change in someone else's folder? Ask them, or make it a separate tiny PR.
+2. **Contracts first, then build in parallel.** Agree on the §8 shape (an event, a tool, an endpoint) in chat, write it into the handbook, then each side builds against it. The frontend never waits for the backend: it runs on the mock orchestrator and on Playwright tests with mocked `/api` routes (`frontend/e2e/live-*.spec.ts`). The backend never waits for the frontend: offline pytest.
+3. **One branch per task, from a fresh `dev`, merged within ~3 hours.** `git pull --rebase origin dev` before you open the PR and again if `dev` moved. Small PRs merge without conflicts; day-long branches don't.
+4. **CI decides** (`.github/workflows/ci.yml`: ruff, pytest, lint, typecheck, build, Playwright). Red CI doesn't merge. Run `npm test` and `npm run test:e2e` locally first; they are the same checks.
+5. **HANDBOOK.md is shared**: in a feature PR, change only your task's line in §10 and the contract you changed in §8. The lead writes the changelog row and the milestone notes when promoting to `demo`.
+6. **Your own database.** Set `MONGODB_DB=ayland_<yourname>` in your `.env` and run `npm run seed`: your demo resets and test data never touch anyone else's. The demo PC keeps `ayland`.
+7. **Your own Claude login; one shared Novelsoft key.** Claude runs through each person's Claude Code login. Novelsoft calls spend the team's credit and share one rate limit: say in chat before a live voice or LLM test, and keep them few.
+8. **Two tasks at once?** Use a second worktree instead of switching branches: `git worktree add ../AYLAND-<task> -b feat/<task> origin/dev` (the `superpowers:using-git-worktrees` skill does this for you). Review agents get their own worktree too.
+9. **Nobody pushes to `dev`, `demo` or `main` directly.** PRs into `dev`; the lead promotes `dev` → `demo` at milestone exits and redeploys the demo PC (`demo-up.ps1 -Build -KeepTunnel`). Vercel redeploys from `demo` on its own.
 
 ### Sync rhythm
 
@@ -637,6 +662,8 @@ Tick a box only after the task's tests pass (offline first, then live, which spe
 ### Using AI coding assistants
 
 Give the assistant this handbook first (§7 and §8 especially), so its code matches our structure and contracts. Review what it writes before you commit, and keep PRs small.
+
+**Claude Code** reads `CLAUDE.md` (our shared rules and workflow) on its own. Open the repo and trust the folder: `.claude/settings.json` then offers the team's plugins (superpowers, frontend-design, claude-code-setup, context7, code-simplifier, code-review, playwright, github, commit-commands). Install them so every agent works the same way: plan, test, simplify, review, commit.
 
 ---
 
@@ -754,3 +781,4 @@ Live mode works through Vercel and the tunnel even though both may buffer stream
 | 2026-10-03 | v1.6 | M2 built: MCP `travel-data` and `merchant` (§8.2 inputs now `origin`/`destination` and `{ lon, lat }` points), `present_options` and the `options` event, prompt v1, Interpreter Agent on a shared A2A base, trip-event long poll, CLI isolation from the developer's claude.ai connectors |
 | 2026-10-03 | v1.7 | M2 review: chat turns as background runs read by long poll (works through tunnels and Vercel), early tool.start, MCP reconnect, slot matching as times; Vercel deployment steps (§12); M1 and M2 exit checks passed live; prompt v1.1 |
 | 2026-10-03 | v1.8 | M3 built: `update_trip_plan` (cancel / move / add / replace, versioned in `trip_versions`) and `undo_plan_change`, `propose_booking` with `proposal.created { proposal, offer }`, reject endpoint, budget service; prompt v2 |
+| 2026-10-03 | v1.9 | Team setup: shared CLAUDE.md and plugins (.claude/settings.json), CI on every PR, PR template, folder ownership per workstream (§9) and how to work in parallel (§11) |
