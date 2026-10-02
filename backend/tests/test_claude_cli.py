@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -7,8 +8,10 @@ from ayland.llm import claude
 
 
 @pytest.fixture
-def no_configured_cli(monkeypatch: pytest.MonkeyPatch) -> None:
+def no_configured_cli(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """No CLAUDE_CLI_PATH and no CLI bundled with the SDK (some platforms' wheels ship one, e.g. on CI)."""
     monkeypatch.setattr(claude, "get_settings", lambda: Settings(_env_file=None))
+    monkeypatch.setattr(claude, "claude_agent_sdk", SimpleNamespace(__file__=str(tmp_path / "sdk" / "__init__.py")))
 
 
 def test_skips_npm_batch_shim_and_picks_newest_extension(
