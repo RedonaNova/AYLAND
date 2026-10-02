@@ -8,7 +8,7 @@ This handbook is our single source of truth for **what** we build, **how** the p
 
 - **First time here?** Read §1 to §4 (about 10 minutes).
 - **While coding,** keep §7 (repo layout), §8 (contracts) and §10 (roadmap) open.
-- **Status:** v1.6 draft (2026-10-03). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
+- **Status:** v1.7 draft (2026-10-03). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
 
 ---
 
@@ -518,27 +518,27 @@ Tick a box only after the task's tests pass (offline first, then live, which spe
 
 ### M1: Walking skeleton (H2 to H5)
 
-- [ ] **M1-A1** FastAPI app with `POST /api/chat` streaming a Claude reply (`message.delta`, `message.done`). System prompt v0 covers the persona, Mongolian and the rules in §5.4. *(built 2026-10-02; tick after the offline and live tests pass)*
-- [ ] **M1-A2** Store chat turns in `messages`. *(built 2026-10-02; tick after the offline and live tests pass)*
-- [ ] **M1-B1** `ayland/db`: client, Pydantic models for §8.1, small repository functions. *(built 2026-10-02; tick after the offline and live tests pass)*
-- [ ] **M1-B2** Seed data (`data/seed/hanoi.json`, `npm run seed`): the demo user; the Hanoi trip (today = the seed date, an outdoor-heavy plan, hotel in the Old Quarter); 25 to 30 realistic offers with a good share of indoor, rainy-day and budget options; and the merchants. `scripts/seed.py` must be idempotent so it doubles as the demo reset. *(built 2026-10-02; tick after the offline and live tests pass)*
-- [ ] **M1-C1** Mobile-first chat screen that reads the SSE stream, plus a trip panel from `GET /api/trips/{id}`. *(built 2026-10-02; tick after the offline and live tests pass)*
-- [ ] **M1-D1** Booking Agent skeleton that serves its Agent Card and a `ping` skill, plus an A2A client helper in the orchestrator that calls it. *(built 2026-10-02; tick after the offline and live tests pass)*
+- [x] **M1-A1** FastAPI app with `POST /api/chat` streaming a Claude reply (`message.delta`, `message.done`). System prompt v0 covers the persona, Mongolian and the rules in §5.4. *(verified live 2026-10-03)*
+- [x] **M1-A2** Store chat turns in `messages`. *(verified live 2026-10-03)*
+- [x] **M1-B1** `ayland/db`: client, Pydantic models for §8.1, small repository functions. *(verified live 2026-10-03)*
+- [x] **M1-B2** Seed data (`data/seed/hanoi.json`, `npm run seed`): the demo user; the Hanoi trip (today = the seed date, an outdoor-heavy plan, hotel in the Old Quarter); 25 to 30 realistic offers with a good share of indoor, rainy-day and budget options; and the merchants. `scripts/seed.py` must be idempotent so it doubles as the demo reset. *(verified live 2026-10-03)*
+- [x] **M1-C1** Mobile-first chat screen that reads the SSE stream, plus a trip panel from `GET /api/trips/{id}`. *(verified live 2026-10-03; the chat now reads turns by long poll, §8.4)*
+- [x] **M1-D1** Booking Agent skeleton that serves its Agent Card and a `ping` skill, plus an A2A client helper in the orchestrator that calls it. *(verified live 2026-10-03: ping 368 ms, also in /api/health)*
 - [ ] **M1-D2** Voice adapter interface (`transcribe(audio, lang)`, `speak(text, lang)`) using the provider chosen in D4, exposed as `/api/voice/*`. *(built 2026-10-02; tick after the offline and live tests pass)*
 
 ### M2: Tools via MCP (H5 to H9)
 
-> **M2 build (2026-10-03).** Both MCP servers run as their own processes and were exercised live without spending credit: Open-Meteo, OSRM, Overpass and an Atlas `$geoNear` all answer, and the Claude CLI, configured exactly like the agent, connects to both servers and lists their six tools. The CLI session is isolated from the developer's account (`ENABLE_CLAUDEAI_MCP_SERVERS=false`, no auto memory) and loads every tool up front (`ENABLE_TOOL_SEARCH=false`). Still to run: one live rain question (Claude) for the exit check, the MCP Inspector by hand, and one live `translate` (Novelsoft).
+> **M1 and M2 exit checks passed (2026-10-03, live, through the public quick tunnel).** One rain question in Live mode: get_trip, get_weather and get_budget_status in parallel, then search_offers, three get_route calls and present_options, all visible in the trace with timings; option cards at 19 s, the Mongolian reply done at 25 s, with the right prices and the $100 budget kept. One translation went over A2A to Orchu in 1.3 s. Still to run by hand: voice (M1-D2) and the MCP Inspector (M2-B3).
 
-- [ ] **M2-B1** MCP `travel-data`: `get_weather` (Open-Meteo plus the DEMO_MODE scenario), `search_places`, `get_route`. *(built 2026-10-03; offline tests pass, live data checked)*
-- [ ] **M2-B2** MCP `merchant`: `search_offers` (filters plus a 2dsphere "near" query), `get_offer`, `check_availability`. *(built 2026-10-03; offline tests pass, live Atlas checked)*
+- [x] **M2-B1** MCP `travel-data`: `get_weather` (Open-Meteo plus the DEMO_MODE scenario), `search_places`, `get_route`. *(verified live 2026-10-03: weather scenario and OSRM routes in the rain turn; places checked live)*
+- [x] **M2-B2** MCP `merchant`: `search_offers` (filters plus a 2dsphere "near" query), `get_offer`, `check_availability`. *(verified live 2026-10-03: `$geoNear` search in the rain turn)*
 - [ ] **M2-B3** Exercise both servers in the MCP Inspector and add smoke tests in `backend/tests`. *(smoke tests built: `tests/test_mcp_servers.py`; Inspector pass still to do)*
-- [ ] **M2-A1** The orchestrator loads the MCP tools (the Claude Agent SDK's `mcp_servers`, over HTTP) and the local tools `get_trip` and `get_budget_status`. *(built 2026-10-03: HTTP MCP servers in the Claude Agent SDK options; tick after the live rain question)*
-- [ ] **M2-A2** Emit `tool.start` and `tool.end` and write `agent_events`. *(built 2026-10-02; tick after the offline and live tests pass)*
-- [ ] **M2-A3** Prompt v1: compare options, show per-person and total cost, respect the budget, end with a next step. *(built 2026-10-03; tick after the live rain question)*
-- [ ] **M2-C1** Trace panel: a live list of agent steps with status and timings. *(UI built in v0; live tool events now named as in §8.2; tick after the live rain question)*
-- [ ] **M2-C2** Option cards: title, time, travel time, cost, and a one-line reason. *(built 2026-10-03: `present_options` emits `options`; tick after the live rain question)*
-- [ ] **M2-D1** Interpreter Agent (A2A) with the `translate` skill. *(built 2026-10-03; offline A2A round trip passes; tick after one live translation)*
+- [x] **M2-A1** The orchestrator loads the MCP tools (the Claude Agent SDK's `mcp_servers`, over HTTP) and the local tools `get_trip` and `get_budget_status`. *(verified live 2026-10-03)*
+- [x] **M2-A2** Emit `tool.start` and `tool.end` and write `agent_events`. *(verified live 2026-10-03: every call in agent_events with its input)*
+- [ ] **M2-A3** Prompt v1: compare options, show per-person and total cost, respect the budget, end with a next step. *(live 2026-10-03: options compared, per-person and total cost, budget kept, next step asked; but one English planning line leaked into the reply and the reply ran long, so prompt v1.1 forbids visible notes and shortens it; tick after the next live turn)*
+- [x] **M2-C1** Trace panel: a live list of agent steps with status and timings. *(verified live 2026-10-03: six steps with status and timings, through the public tunnel)*
+- [x] **M2-C2** Option cards: title, time, travel time, cost, and a one-line reason. *(verified live 2026-10-03)*
+- [x] **M2-D1** Interpreter Agent (A2A) with the `translate` skill. *(verified live 2026-10-03: A2A translate in 1.3 s)*
 
 ### M3: Plan and budget (H8 to H12)
 
@@ -747,3 +747,4 @@ Live mode works through Vercel and the tunnel even though both may buffer stream
 | 2026-10-02 | v1.5 | M1-B1 (§8.1 Pydantic models, validated seed writes) and M1-D1 (Booking Agent card + `ping`, orchestrator A2A client) built; §8.3 skill-call convention |
 | 2026-10-02 | v1.5.1 | M1 review: full seed (M1-B2), DEMO_MODE guard, `transcribe/speak(…, lang)` (M1-D2), live SSE fixes (proxy gzip, heartbeat, reconnect), stale-seed refresh |
 | 2026-10-03 | v1.6 | M2 built: MCP `travel-data` and `merchant` (§8.2 inputs now `origin`/`destination` and `{ lon, lat }` points), `present_options` and the `options` event, prompt v1, Interpreter Agent on a shared A2A base, trip-event long poll, CLI isolation from the developer's claude.ai connectors |
+| 2026-10-03 | v1.7 | M2 review: chat turns as background runs read by long poll (works through tunnels and Vercel), early tool.start, MCP reconnect, slot matching as times; Vercel deployment steps (§12); M1 and M2 exit checks passed live; prompt v1.1 |
