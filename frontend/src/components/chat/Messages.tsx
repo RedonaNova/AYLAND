@@ -52,7 +52,7 @@ function UserBubble({ text, via }: { text: string; via: "text" | "voice" }) {
     <motion.div {...enter} className="flex justify-end">
       <div className="max-w-[85%] rounded-2xl rounded-br-md bg-sunrise-soft px-4 py-2.5 text-[14.5px] leading-relaxed ring-1 ring-white/[0.08]">
         {via === "voice" && (
-          <span className="mb-1 flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-sun-300">
+          <span className="mb-1 flex items-center gap-1 text-[11.5px] font-medium text-sun-300">
             <AudioLines className="size-3" /> STT · mn-MN
           </span>
         )}
@@ -166,7 +166,7 @@ function NudgeCard({
     >
       <Avatar />
       <div className="relative min-w-0 flex-1 overflow-hidden rounded-2xl bg-sky-400/[0.07] p-4 ring-1 ring-sky-400/25">
-        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-400">
+        <div className="flex items-center gap-2 text-[12px] font-semibold text-sky-400">
           <motion.span animate={{ y: [0, -2, 0] }} transition={{ duration: 2, repeat: Infinity }}>
             <CloudRain className="size-4" />
           </motion.span>

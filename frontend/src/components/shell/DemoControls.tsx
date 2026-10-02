@@ -69,8 +69,8 @@ export function DemoControls({ className }: { className?: string }) {
   return (
     <div className={cn("surface rounded-2xl p-3", className)}>
       <div className="mb-2.5 flex items-center justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">{mn.demo.title}</span>
-        <span className={cn("rounded-full px-2 py-0.5 font-mono text-[9px]", live ? "bg-mint-400/15 text-mint-400" : "bg-white/5 text-fg-subtle")}>
+        <span className="text-[11.5px] font-semibold text-fg-subtle">{mn.demo.title}</span>
+        <span className={cn("rounded-full px-2 py-0.5 text-[10.5px] font-medium", live ? "bg-mint-400/15 text-mint-400" : "bg-white/5 text-fg-subtle")}>
           {live ? mn.demo.liveBadge : mn.demo.mockBadge}
         </span>
       </div>
@@ -108,7 +108,7 @@ export function DemoControls({ className }: { className?: string }) {
         <RotateCcw className="size-3.5" />
         {mn.demo.reset}
       </button>
-      <p className="mt-1.5 text-center font-mono text-[9px] text-fg-subtle/80">Alt+R · Alt+C · Alt+N</p>
+      <p className="mt-1.5 text-center text-[10.5px] text-fg-subtle/80">Alt+R · Alt+C · Alt+N</p>
     </div>
   );
 }

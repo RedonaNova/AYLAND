@@ -40,7 +40,7 @@ export function TodayPanel() {
       </div>
 
       <section className="pt-1">
-        <h3 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">{mn.today.timeline}</h3>
+        <h3 className="mb-2 px-1 text-[12px] font-semibold text-fg-subtle">{mn.today.timeline}</h3>
         <Timeline
           items={items}
           now={view.now}

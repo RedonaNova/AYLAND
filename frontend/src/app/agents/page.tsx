@@ -79,7 +79,7 @@ export default function AgentsPage() {
 
         <section className="mt-6">
           <div className="mb-3 flex items-center gap-2">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">{mn.agents.network}</h2>
+            <h2 className="text-[12px] font-semibold text-fg-subtle">{mn.agents.network}</h2>
             {busy && (
               <span className="flex items-center gap-1 rounded-full bg-sun-400/15 px-2 py-0.5 text-[10px] font-semibold text-sun-300">
                 <span className="size-1.5 animate-pulse rounded-full bg-sun-400" /> {mn.agents.live}
@@ -90,7 +90,7 @@ export default function AgentsPage() {
         </section>
 
         <section className="mt-6">
-          <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">{mn.agents.log}</h2>
+          <h2 className="mb-3 text-[12px] font-semibold text-fg-subtle">{mn.agents.log}</h2>
           <div className="surface overflow-hidden rounded-2xl">
             {log.length === 0 ? (
               <p className="p-6 text-center text-sm text-fg-muted">{mn.agents.empty}</p>

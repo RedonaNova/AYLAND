@@ -74,7 +74,7 @@ function NowMarker({ time }: { time: string }) {
         <span className="size-2 rounded-full bg-dawn-500" />
       </span>
       <span className="ml-4 h-px flex-1 bg-linear-to-r from-dawn-500/80 to-transparent" />
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-dawn-500">
+      <span className="text-[11.5px] font-semibold text-dawn-500">
         {mn.today.now} · {time}
       </span>
     </motion.li>

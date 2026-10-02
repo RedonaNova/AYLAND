@@ -41,7 +41,7 @@ export default function TripPage() {
           <div className="pointer-events-none absolute -bottom-24 left-10 size-64 rounded-full bg-dusk-500/20 blur-3xl" />
           <div className="relative flex flex-wrap items-end justify-between gap-6">
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sun-300">Việt Nam</div>
+              <div className="text-[12px] font-semibold text-sun-300">Việt Nam</div>
               <div className="font-display text-5xl font-bold tracking-tight sm:text-6xl">HÀ NỘI</div>
               <div className="mt-2 text-sm text-fg-muted">
                 {dateMn(first)} — {dateMn(last)}
@@ -69,18 +69,18 @@ export default function TripPage() {
           </div>
           <div className="relative mt-5 grid grid-cols-2 gap-3 sm:max-w-sm">
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-fg-subtle">{mn.tripPage.budgetTotal}</div>
+              <div className="text-[11.5px] text-fg-subtle">{mn.tripPage.budgetTotal}</div>
               <div className="font-display text-xl font-semibold">{usd(trip.budget.total)}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-fg-subtle">{mn.tripPage.spentSoFar}</div>
+              <div className="text-[11.5px] text-fg-subtle">{mn.tripPage.spentSoFar}</div>
               <AnimatedUsd value={trip.budget.spent} className="font-display text-xl font-semibold" />
             </div>
           </div>
         </motion.section>
 
         <section className="mt-8">
-          <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">{mn.tripPage.wallet}</h2>
+          <h2 className="mb-3 text-[12px] font-semibold text-fg-subtle">{mn.tripPage.wallet}</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             <AnimatePresence initial={false}>
               {[...view.bookings].reverse().map((b, i) => (
@@ -91,7 +91,7 @@ export default function TripPage() {
         </section>
 
         <section className="mt-8">
-          <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">{mn.tripPage.days}</h2>
+          <h2 className="mb-3 text-[12px] font-semibold text-fg-subtle">{mn.tripPage.days}</h2>
           <div className="space-y-2">
             {trip.days.map((day, i) => (
               <DayRow key={day.date} index={i} view={view} day={day} today={today} />

@@ -59,7 +59,7 @@ export function MapPanel({ view, today, options }: { view: TripView; today: stri
   return (
     <div className="surface relative h-full overflow-hidden rounded-2xl">
       <MapView points={points} routes={routes} />
-      <div className="pointer-events-none absolute left-3 top-3 z-[500] rounded-full bg-ink-950/75 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-fg-muted backdrop-blur">
+      <div className="pointer-events-none absolute left-3 top-3 z-[500] rounded-full bg-ink-950/75 px-2.5 py-1 text-[11.5px] font-medium text-fg-muted backdrop-blur">
         {mn.today.map}
       </div>
     </div>

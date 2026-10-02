@@ -105,7 +105,7 @@ function Sidebar({ pathname }: { pathname: string }) {
 
       {view && (
         <div className="relative mt-7 overflow-hidden rounded-2xl bg-sunrise-soft p-4 ring-1 ring-white/[0.07]">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">{mn.nav.trip}</div>
+          <div className="text-[11.5px] font-semibold text-fg-subtle">{mn.nav.trip}</div>
           <div className="mt-1 flex items-baseline justify-between">
             <span className="font-display text-lg font-semibold">{mn.trip.city}</span>
             <span className="text-xs text-fg-muted">{mn.trip.dayOf(tripDay(view), view.trip.days.length)}</span>

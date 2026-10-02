@@ -40,7 +40,7 @@ export function WeatherCard({ weather, now }: { weather: Weather; now: string })
       <RainOverlay active={rain} density={0.4} />
       <div className="relative flex items-start justify-between">
         <div>
-          <div className="text-[11px] font-medium uppercase tracking-wider text-fg-subtle">
+          <div className="text-[12px] font-medium text-fg-subtle">
             {mn.trip.city} · {hhmm(now)}
           </div>
           <AnimatePresence mode="wait" initial={false}>
