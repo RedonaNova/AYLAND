@@ -11,7 +11,7 @@ from typing import Annotated, Any, Literal
 import httpx
 from a2a.client.errors import A2AClientError, A2AClientTimeoutError, AgentCardResolutionError
 from claude_agent_sdk import ClaudeSDKError
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -33,6 +33,7 @@ from ayland.novelsoft import OyuNotConfigured
 from . import a2a, prompts
 from .agent import Event, agent
 from .events import trip_events
+from .runs import Run, runs
 
 logger = logging.getLogger("ayland.orchestrator")
 # no-transform: a compressing proxy (Next's /api rewrite, a tunnel) would otherwise hold events back.
@@ -244,9 +245,33 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
 
 
-@app.post("/api/chat")
-async def chat(body: ChatRequest) -> StreamingResponse:
-    """One agent turn as SSE. Turns are stored in `messages`, tool calls in `agent_events`."""
+async def chat_turn(trip_id: str, message: str, run_id: str) -> AsyncIterator[Event]:
+    """One agent turn as §8.4 events. The reply is stored in `messages`, tool calls in `agent_events`."""
+    reply = ""
+    try:
+        async for item in agent.run(trip_id, message, run_id):
+            data = item["data"]
+            if item["type"] == "message.delta":
+                reply += data["text"]
+            elif item["type"] == "tool.end":
+                await audit(
+                    trip_id,
+                    run_id,
+                    type="tool",
+                    name=data["name"],
+                    input=data.get("input"),
+                    output_summary=data["summary"] if data["ok"] else data.get("detail") or data["summary"],
+                    ok=data["ok"],
+                    ms=data["ms"],
+                )
+            yield item
+    except Exception as err:  # noqa: BLE001 - the turn must end with a readable error, not a silent stop
+        yield {"type": "error", "data": {"message": f"{type(err).__name__}: {err}"}}
+    if reply:
+        await repo.save_message(get_db(), trip_id, "assistant", reply, run_id)
+
+
+async def start_chat(body: ChatRequest) -> Run:
     db = get_db()
     try:
         await repo.get_trip(db, body.trip_id)  # only real trips get a Claude session
@@ -254,31 +279,35 @@ async def chat(body: ChatRequest) -> StreamingResponse:
         raise HTTPException(404, str(err)) from err
     run_id = f"run_{uuid.uuid4().hex[:10]}"
     await repo.save_message(db, body.trip_id, "user", body.message, run_id)
+    return runs.start(body.trip_id, lambda run: chat_turn(body.trip_id, body.message, run.id), run_id=run_id)
 
-    async def events() -> AsyncIterator[str]:
-        reply = ""
-        try:
-            async for item in agent.run(body.trip_id, body.message, run_id):
-                data = item["data"]
-                if item["type"] == "message.delta":
-                    reply += data["text"]
-                elif item["type"] == "tool.end":
-                    await audit(
-                        body.trip_id,
-                        run_id,
-                        type="tool",
-                        name=data["name"],
-                        output_summary=data["summary"],
-                        ok=data["ok"],
-                        ms=data["ms"],
-                    )
-                yield sse(item)
-        except Exception as err:  # noqa: BLE001 - the stream must end with a readable error, not a cut connection
-            yield sse({"type": "error", "data": {"message": f"{type(err).__name__}: {err}"}})
-        if reply:
-            await repo.save_message(db, body.trip_id, "assistant", reply, run_id)
 
-    return stream(with_heartbeat(events()))
+@app.post("/api/chat")
+async def chat(body: ChatRequest) -> StreamingResponse:
+    """One agent turn as SSE (§8.4). The turn runs in the background, so a dropped connection doesn't cut it."""
+    run = await start_chat(body)
+    return stream(with_heartbeat(sse(item) async for item in run.stream()))
+
+
+@app.post("/api/chat/runs")
+async def chat_run(body: ChatRequest) -> dict[str, str]:
+    """The same turn, read by long poll (what the web client uses): works through proxies that buffer streams."""
+    return {"run_id": (await start_chat(body)).id}
+
+
+@app.get("/api/chat/runs/{run_id}/events")
+async def chat_run_events(run_id: str, cursor: Annotated[int, Query(ge=0)] = 0) -> dict[str, Any]:
+    """The run's events after `cursor`, waiting up to POLL_WAIT_S for the first; `done` once the turn ended."""
+    run = runs.get(run_id)
+    if run is None:
+        raise HTTPException(404, f"No run {run_id!r} (finished runs are kept for 10 minutes).")
+    return jsonable_encoder(await run.events_after(cursor, POLL_WAIT_S))
+
+
+@app.delete("/api/chat/runs/{run_id}")
+async def cancel_chat_run(run_id: str) -> dict[str, bool]:
+    """The traveler left mid-turn (reset, mode switch): stop it, so the next question doesn't wait for it."""
+    return {"cancelled": runs.cancel(run_id)}
 
 
 Lang = Literal["mn", "en"]
@@ -310,7 +339,7 @@ async def interpret(body: InterpretRequest) -> dict[str, Any]:
             output_summary=direction,
             ms=round(result.ms),
         )
-        return {"text": result.text}
+        return {"text": result.text, "via": "orchu", "ms": round(result.ms)}
     except (httpx.HTTPError, A2AClientError, a2a.A2AReplyMissing) as err:
         # The agent took the request (and may still be translating): translating again would only add to
         # Orchu's rate limit, so report it instead.
@@ -328,7 +357,7 @@ async def interpret(body: InterpretRequest) -> dict[str, Any]:
     )
     if failed:
         raise HTTPException(502, f"Interpreter Agent: {reply.data['error']}")
-    return {"text": reply.data["text"]}
+    return {"text": reply.data["text"], "via": "a2a", "ms": round(reply.ms)}
 
 
 @app.post("/api/voice/transcribe")

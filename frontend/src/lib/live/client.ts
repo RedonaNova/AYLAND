@@ -1,16 +1,22 @@
 // HTTP client for the FastAPI orchestrator (HANDBOOK §8.4), reached through the Next.js /api proxy.
-// Chat streams as SSE; trip events arrive by long poll.
+// Chat turns and trip events both arrive by long poll, so live mode works through any proxy or tunnel.
 
 import { mn } from "@/i18n/mn";
 import type { AylandApi } from "../api";
 import type { AgentEvent, TripView } from "../types";
-import { readSse } from "./sse";
 
 const TRIP_EVENTS = ["nudge", "plan.updated", "booking.confirmed"] as const;
-/** Without these the chat can't work; the rest are reported as warnings. */
-const REQUIRED = ["mongodb", "claude_cli", "oyu"] as const;
-const OPTIONAL = ["mcp_travel_data", "mcp_merchant", "a2a_booking", "a2a_interpreter"] as const;
+/** Without these the agent can't plan (no weather, no offers); the A2A agents are reported as warnings. */
+const REQUIRED = ["mongodb", "claude_cli", "oyu", "mcp_travel_data", "mcp_merchant"] as const;
+const OPTIONAL = ["a2a_booking", "a2a_interpreter"] as const;
 const RETRY_MS = { first: 1000, max: 15_000 };
+const POLL_ATTEMPTS = 3;
+
+interface RunPage {
+  events: AgentEvent[];
+  cursor: number;
+  done: boolean;
+}
 
 interface TripEventPage {
   events: AgentEvent[];
@@ -48,18 +54,41 @@ export function createLiveClient(base: string): AylandApi {
     return json<T>(path, postJsonInit(body));
   }
 
-  async function* events(path: string, body: unknown, signal?: AbortSignal): AsyncGenerator<AgentEvent> {
-    const response = await fetch(`${base}${path}`, { ...postJsonInit(body), signal });
-    if (!response.ok || !response.body) {
-      yield { type: "error", data: { message: await reason(response) } };
-      return;
+  /** One page of a run, retried through a short network blip so the turn isn't lost while it keeps running. */
+  async function runPage(path: string, signal?: AbortSignal): Promise<RunPage> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await json<RunPage>(path, { signal });
+      } catch (err) {
+        if (signal?.aborted || attempt >= POLL_ATTEMPTS) throw err;
+        await new Promise((resolve) => setTimeout(resolve, RETRY_MS.first * attempt));
+      }
     }
-    yield* readSse(response.body);
+  }
+
+  /**
+   * A turn started on the backend and read by long poll rather than as one streamed response: Cloudflare quick
+   * tunnels (and other proxies) hold streamed responses back until they end. Aborting cancels the turn.
+   */
+  async function* polledRun(path: string, body: unknown, signal?: AbortSignal): AsyncGenerator<AgentEvent> {
+    const { run_id } = await json<{ run_id: string }>(path, { ...postJsonInit(body), signal });
+    const cancel = () => void fetch(`${base}${path}/${run_id}`, { method: "DELETE" }).catch(() => undefined);
+    signal?.addEventListener("abort", cancel, { once: true });
+    try {
+      for (let cursor = 0; ; ) {
+        const page = await runPage(`${path}/${run_id}/events?cursor=${cursor}`, signal);
+        yield* page.events;
+        if (page.done) return;
+        cursor = page.cursor;
+      }
+    } finally {
+      signal?.removeEventListener("abort", cancel);
+    }
   }
 
   return {
     getTrip: (tripId) => json<TripView>(`/trips/${tripId}`),
-    chat: (req, signal) => events("/chat", req, signal),
+    chat: (req, signal) => polledRun("/chat/runs", req, signal),
     async *approveProposal() {
       yield { type: "error", data: { message: mn.live.notYet } };
     },
@@ -125,7 +154,7 @@ export function createLiveClient(base: string): AylandApi {
         if (failing.length) return { ok: false, detail: failing.map(problem).join(" · ") };
         const warnings = OPTIONAL.filter((key) => !ok(key)).map(problem);
         if (checks.demo_mode === false) warnings.push(mn.live.demoModeOff);
-        const services = warnings.length ? "MongoDB · Claude · Novelsoft" : "MongoDB · Claude · Novelsoft · MCP · A2A";
+        const services = warnings.length ? "MongoDB · Claude · Novelsoft · MCP" : "MongoDB · Claude · Novelsoft · MCP · A2A";
         return { ok: true, detail: [services, ...warnings].join(" · ") };
       } catch {
         return { ok: false, detail: mn.live.unreachable };
