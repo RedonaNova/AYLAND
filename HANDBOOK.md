@@ -361,7 +361,7 @@ bookings   { _id, trip_id, proposal_id, offer_id, status: "held" | "confirmed" |
 
 memories   { _id, user_id, trip_id?, kind: "preference" | "fact" | "feedback", text, embedding?, created_at }
 
-messages   { _id, trip_id, role, content, ts }    // raw API content blocks, so chats can resume
+messages   { _id, trip_id, role, content, run_id, ts }  // the turn's text; Claude's own history lives in its CLI session
 
 agent_events { _id, trip_id, run_id, type: "tool" | "a2a" | "plan" | "booking" | "llm",
                name, input, output_summary, ok, ms, ts }
@@ -428,8 +428,8 @@ agent_events { _id, trip_id, run_id, type: "tool" | "a2a" | "plan" | "booking" |
 | POST | `/api/proposals/{id}/approve` | Consent: calls the Booking Agent over A2A, updates the plan, emits events |
 | POST | `/api/proposals/{id}/reject` | Rejects the proposal |
 | GET | `/api/trips/{trip_id}/events` | *(Should)* SSE stream of plan and booking updates and nudges |
-| POST | `/api/demo/reset` | Re-seeds demo data (DEMO_MODE only) |
-| POST | `/api/demo/scenario` | `{ weather }` set to `"rain"` or `"clear"` switches the scenario (DEMO_MODE only) |
+| POST | `/api/demo/reset` | Re-seeds demo data (DEMO_MODE only; 403 otherwise) |
+| POST | `/api/demo/scenario` | `{ weather }` set to `"rain"` or `"clear"` switches the scenario (DEMO_MODE only; 403 otherwise) |
 
 **SSE event types**
 
@@ -491,6 +491,8 @@ Times are **hours from kickoff (H0)** and assume a build window of about 24 hour
 
 Tick a box only after the task's tests pass (offline first, then live, which spends Novelsoft credit and Claude usage); until then mark it *built*. Task IDs (M2-B1 and so on) go in branch names and PR titles.
 
+> **M1 review (2026-10-02).** Seed completed (demo user, 28 merchants, 28 offers with descriptions, opening hours and slots on the three remaining days); `/api/demo/*` refuse when DEMO_MODE is off; voice adapters take `lang` (`ayland/voice`); SSE is sent `no-transform` with heartbeats and the web proxy no longer gzips it (it held live streams back); the trip event stream reconnects; failed turns show their reason.
+>
 > **Live slice (2026-10-02).** Live mode (demo controls → Live) runs on the real backend: Claude through the CLI login with `get_trip` and `get_budget_status` reading MongoDB, chat stored in `messages`, tool calls in `agent_events`, the rain nudge on the trip event stream, Anir for the mic, tsuurAI for Mongolian speech and Orchu for the interpreter. Options, proposals and booking still need M2–M4; until then the full magic moment runs in Mock mode. Measured: first rain question about 14 s (mostly thinking), follow-ups about 4 s.
 >
 > **Web demo v0 (2026-09-30).** The UI side of M1-C1, M2-C1, M2-C2, M3-C1, M3-C2, M4-C1, M5-C1 (simulated voice) and M5-C2 is built against an in-browser mock orchestrator that emits the §8.4 events. Those boxes stay unticked until each is wired to the real orchestrator and passes its milestone's exit check. `frontend/e2e/` already runs the Act 1 to 4 flow and is the starting point for M4-ALL.
@@ -636,7 +638,8 @@ git switch dev
 cp .env.example .env     # fill in MONGODB_URI and OYU_API_KEY (never paste keys in chat groups)
 npm run setup            # root tools, frontend (npm) and backend (uv sync)
 npm run check            # MongoDB, Claude (CLI), OyuLLM, tsuurAI → Anir round trip
-npm run seed             # load the Hanoi demo into MongoDB (also the demo reset)
+npm run seed             # load the Hanoi demo into MongoDB (also the demo reset; in DEMO_MODE a missing or
+                         # stale seed is replayed for today when the UI loads the trip)
 npm run dev              # web :3000 + orchestrator :8000 + Booking Agent :8301; choose Mock or Live in the demo controls
 npm test                 # backend unit tests;  npm run test:e2e for the browser golden path
 ```
@@ -721,3 +724,4 @@ The MCP servers and the Interpreter Agent join `npm run dev` in M2; update this 
 | 2026-10-01 | v1.3 | Interpreter is Mongolian ⇄ English for now (any destination language later); Orchu for translation |
 | 2026-10-02 | v1.4 | M1 live slice: chat on Claude + MongoDB tools, seed, voice and interpreter endpoints, Mock/Live switch, `/api` proxy, `demo-up.ps1`; M1-A1, A2, B2, C1, D2 and M2-A2 built, ticked only after tests |
 | 2026-10-02 | v1.5 | M1-B1 (§8.1 Pydantic models, validated seed writes) and M1-D1 (Booking Agent card + `ping`, orchestrator A2A client) built; §8.3 skill-call convention |
+| 2026-10-02 | v1.5.1 | M1 review: full seed (M1-B2), DEMO_MODE guard, `transcribe/speak(…, lang)` (M1-D2), live SSE fixes (proxy gzip, heartbeat, reconnect), stale-seed refresh |
