@@ -159,7 +159,7 @@ export type AgentEvent =
   | { type: "tool.end"; data: { run_id: string; call_id: string; name: string; ok: boolean; summary: string; ms: number } }
   | { type: "a2a.call"; data: { agent: string; skill: string; status: A2AStatus } }
   | { type: "options"; data: { run_id: string; options: TripOption[] } }
-  | { type: "proposal.created"; data: { proposal: Proposal } }
+  | { type: "proposal.created"; data: { proposal: Proposal; offer?: Offer } }
   | { type: "plan.updated"; data: { trip_id: string; version: number; changed_item_ids: string[] } }
   | { type: "booking.confirmed"; data: { booking: Booking } }
   | { type: "nudge"; data: { text: string; detail?: string; actions: NudgeAction[] } }

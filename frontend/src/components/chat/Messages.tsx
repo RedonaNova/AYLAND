@@ -25,6 +25,7 @@ export function MessageList({ items }: { items: ChatItem[] }) {
   for (const it of items) {
     if (it.kind !== "assistant") continue;
     it.options?.forEach((o) => offers.set(o.offer._id, o.offer));
+    if (it.proposalOffer) offers.set(it.proposalOffer._id, it.proposalOffer);
     if (it.proposal && it.proposalState !== "rejected") chosenOfferId = it.proposal.offer_id;
   }
 

@@ -72,6 +72,7 @@ const TOOLS: Record<string, ToolMeta> = {
   get_budget_status: { label: "Төсөв шалгах", node: "mongodb" },
   update_trip_plan: { label: "Хөтөлбөр шинэчлэх", node: "mongodb" },
   propose_booking: { label: "Захиалгын санал", node: "mongodb" },
+  undo_plan_change: { label: "Өөрчлөлт буцаах", node: "mongodb" },
   present_options: { label: "Хувилбар харуулах", node: "orchestrator" },
   get_weather: { label: "Цаг агаар", node: "travel-data" },
   search_places: { label: "Газар хайх", node: "travel-data" },
