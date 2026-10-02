@@ -114,7 +114,8 @@ class Agent:
         because unread messages would otherwise leak into the next turn."""
         async with self._turns[trip_id]:
             client = await self._session(trip_id)
-            tools.shown.pop(trip_id, None)  # cards from a turn that died before emitting them
+            tools.outbox.pop(trip_id, None)  # events of a turn that died before sending them
+            tools.turn_runs[trip_id] = run_id  # so the tools' agent_events carry this turn's id
             finished = False
             try:
                 await self._reconnect_mcp(client)
@@ -197,8 +198,8 @@ class Agent:
                             input=inputs.pop(block.tool_use_id, {}),  # for agent_events (§8.1)
                             detail=detail,
                         )
-                        if name == "present_options" and (options := tools.shown.pop(trip_id, None)):
-                            yield event("options", run_id=run_id, options=options)
+                        for queued in tools.outbox.pop(trip_id, []):  # option cards, an approval card
+                            yield queued
             elif isinstance(message, ResultMessage):
                 if message.is_error:
                     yield event("error", message=message.result or message.subtype)

@@ -7,6 +7,7 @@ import httpx
 import pytest
 from claude_agent_sdk import AssistantMessage, ResultMessage, StreamEvent, ToolResultBlock, ToolUseBlock, UserMessage
 
+from ayland import clock
 from ayland.a2a_agents.interpreter import server as interpreter
 from ayland.llm.orchu import Translation
 from ayland.orchestrator import a2a, tools
@@ -51,7 +52,7 @@ def test_tool_names_drop_the_mcp_prefix() -> None:
     assert tools.display_name("mcp__merchant__search_offers") == "search_offers"
     assert tools.display_name("mcp__travel-data__get_route") == "get_route"
     assert tools.display_name("mcp__ayland__present_options") == "present_options"
-    assert "mcp__travel-data__get_weather" in tools.ALLOWED and len(tools.ALLOWED) == 9
+    assert "mcp__travel-data__get_weather" in tools.ALLOWED and len(tools.ALLOWED) == 12
 
 
 class FakeClient:
@@ -88,7 +89,7 @@ async def test_a_turn_becomes_section_8_4_events_with_option_cards() -> None:
         _delta("Алийг нь захиалах вэ?"),
         ResultMessage("success", 1, 1, False, 3, "s"),
     ]
-    tools.shown["trip_x"] = [card]  # what present_options would have left for the loop
+    tools.emit("trip_x", "options", run_id="run_1", options=[card])  # what present_options leaves for the loop
     events = [e async for e in Agent()._turn(FakeClient(script), "trip_x", "run_1")]
     kinds = [e["type"] for e in events]
     assert kinds == [
@@ -103,7 +104,7 @@ async def test_a_turn_becomes_section_8_4_events_with_option_cards() -> None:
     assert events[2]["data"]["name"] == "present_options" and events[2]["data"]["summary"] == "1 хувилбар"
     assert events[3]["data"] == {"run_id": "run_1", "options": [card]}
     assert events[4]["data"]["text"] == "\n\n"  # the closing sentence is its own paragraph
-    assert "trip_x" not in tools.shown
+    assert "trip_x" not in tools.outbox
 
 
 def test_the_cli_session_is_isolated_from_the_developers_account() -> None:
@@ -116,7 +117,7 @@ def test_the_cli_session_is_isolated_from_the_developers_account() -> None:
 
 
 def test_a_slot_is_matched_as_a_time_not_as_a_string() -> None:
-    hanoi = tools._slot_time("2026-10-05T15:00:00+07:00")
-    assert tools._slot_time("2026-10-05T08:00:00Z") == hanoi  # the same moment in UTC
-    assert tools._slot_time("2026-10-05T15:00+07:00") == hanoi  # no seconds
-    assert tools._slot_time("after lunch") is None
+    hanoi = clock.parse_local("2026-10-05T15:00:00+07:00")
+    assert clock.parse_local("2026-10-05T08:00:00Z") == hanoi  # the same moment in UTC
+    assert clock.parse_local("2026-10-05T15:00+07:00") == hanoi  # no seconds
+    assert clock.parse_local("after lunch") is None
