@@ -11,14 +11,14 @@ from typing import Annotated, Any, Literal
 import httpx
 from a2a.client.errors import A2AClientError
 from claude_agent_sdk import ClaudeSDKError
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
 from pymongo.errors import PyMongoError
 
-from ayland import clock
+from ayland import clock, voice
 from ayland.config import get_settings
 from ayland.db import repo
 from ayland.db.client import MongoNotConfigured, explain, get_db, ping
@@ -26,14 +26,14 @@ from ayland.demo import seed
 from ayland.llm import orchu
 from ayland.llm.claude import ClaudeCliNotFound, find_cli
 from ayland.novelsoft import OyuNotConfigured
-from ayland.voice import oyu as voice
 
 from . import a2a, prompts
 from .agent import Event, agent
 from .events import trip_events
 
 logger = logging.getLogger("ayland.orchestrator")
-SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+# no-transform: a compressing proxy (Next's /api rewrite, a tunnel) would otherwise hold events back.
+SSE_HEADERS = {"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"}
 NUDGE_DELAY_S = 1.4
 HEARTBEAT_S = 15
 HEALTH_TIMEOUT_S = 2.0
@@ -67,6 +67,11 @@ async def mongo_error(_: Request, err: PyMongoError) -> JSONResponse:
     return JSONResponse({"detail": explain(err)}, 503)
 
 
+@app.exception_handler(voice.VoiceRequestError)
+async def voice_request_error(_: Request, err: voice.VoiceRequestError) -> JSONResponse:
+    return JSONResponse({"detail": str(err)}, 400)
+
+
 @app.exception_handler(MongoNotConfigured)
 @app.exception_handler(OyuNotConfigured)
 async def not_configured(_: Request, err: RuntimeError) -> JSONResponse:
@@ -81,12 +86,38 @@ async def audit(trip_id: str, run_id: str, **fields: Any) -> None:
         logger.warning("agent_events write failed: %s", err if isinstance(err, ValidationError) else explain(err))
 
 
+def require_demo_mode() -> None:
+    """§8.4: the demo controls only exist in DEMO_MODE, so a real deployment can't be reset by a visitor."""
+    if not get_settings().demo_mode:
+        raise HTTPException(403, "DEMO_MODE is off.")
+
+
 def sse(item: Event) -> str:
     return f"event: {item['type']}\ndata: {json.dumps(jsonable_encoder(item['data']), ensure_ascii=False)}\n\n"
 
 
 def stream(events: AsyncIterator[str]) -> StreamingResponse:
     return StreamingResponse(events, media_type="text/event-stream", headers=SSE_HEADERS)
+
+
+async def with_heartbeat(frames: AsyncIterator[str], every: float = HEARTBEAT_S) -> AsyncIterator[str]:
+    """The frames, plus an SSE comment whenever they pause for `every` seconds (Claude thinking), so proxies and
+    tunnels don't cut the stream as idle. The pending read is never cancelled by the timeout, only waited on."""
+    pending = asyncio.ensure_future(anext(frames))
+    try:
+        while True:
+            done, _ = await asyncio.wait({pending}, timeout=every)
+            if not done:
+                yield ": ping\n\n"
+                continue
+            try:
+                frame = pending.result()
+            except StopAsyncIteration:
+                return
+            yield frame
+            pending = asyncio.ensure_future(anext(frames))
+    finally:
+        pending.cancel()  # the client left mid-turn: this ends the turn (and its Claude session) too
 
 
 _background: set[asyncio.Task[None]] = set()  # strong references, so pending tasks aren't garbage-collected
@@ -131,8 +162,11 @@ async def health() -> dict[str, object]:
 @app.get("/api/trips/{trip_id}")
 async def get_trip(trip_id: str) -> dict[str, Any]:
     """The UI loads this first, so it is also the moment to start Claude's session in the background."""
+    db = get_db()
+    if get_settings().demo_mode and await seed.ensure_current(db, trip_id):
+        await agent.close(trip_id)  # its system prompt carries the old date
     try:
-        view = jsonable_encoder(await repo.trip_view(get_db(), trip_id))
+        view = jsonable_encoder(await repo.trip_view(db, trip_id))
     except repo.TripNotFound as err:
         raise HTTPException(404, str(err)) from err
 
@@ -206,7 +240,7 @@ async def chat(body: ChatRequest) -> StreamingResponse:
         if reply:
             await repo.save_message(db, body.trip_id, "assistant", reply, run_id)
 
-    return stream(events())
+    return stream(with_heartbeat(events()))
 
 
 Lang = Literal["mn", "en"]
@@ -239,9 +273,7 @@ async def interpret(body: InterpretRequest) -> dict[str, Any]:
 @app.post("/api/voice/transcribe")
 async def transcribe(file: Annotated[UploadFile, File()], lang: Annotated[Lang, Form()] = "mn") -> dict[str, str]:
     """Anir speech-to-text (Mongolian). English speech is recognized in the browser."""
-    if lang != "mn":
-        raise HTTPException(400, "Only Mongolian is transcribed here; English uses the browser's speech recognition.")
-    heard = await voice.transcribe(await file.read(), filename=file.filename or "speech.wav")
+    heard = await voice.transcribe(await file.read(), lang, filename=file.filename or "speech.wav")
     return {"text": heard.text}
 
 
@@ -253,15 +285,11 @@ class SpeakRequest(BaseModel):
 @app.post("/api/voice/speak")
 async def speak(body: SpeakRequest) -> Response:
     """tsuurAI text-to-speech (Mongolian) as WAV. English speech is synthesized in the browser."""
-    if body.lang != "mn":
-        raise HTTPException(400, "Only Mongolian is synthesized here; English uses the browser's speech synthesis.")
-    if not body.text.strip():
-        raise HTTPException(400, "Nothing to say: the text is empty.")
-    speech = await voice.speak_long(body.text)
+    speech = await voice.speak(body.text, body.lang)
     return Response(content=speech.wav, media_type="audio/wav")
 
 
-@app.post("/api/demo/reset")
+@app.post("/api/demo/reset", dependencies=[Depends(require_demo_mode)])
 async def demo_reset() -> dict[str, str]:
     db = get_db()
     trip_id = await seed.reset(db)
@@ -278,7 +306,7 @@ class ScenarioRequest(BaseModel):
     weather: repo.Weather
 
 
-@app.post("/api/demo/scenario")
+@app.post("/api/demo/scenario", dependencies=[Depends(require_demo_mode)])
 async def demo_scenario(body: ScenarioRequest) -> dict[str, str]:
     """Switch the DEMO_MODE weather. Rain triggers the Act 1 nudge on the trip event stream."""
     db = get_db()
