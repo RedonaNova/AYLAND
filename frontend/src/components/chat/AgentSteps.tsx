@@ -23,7 +23,8 @@ const STEP_ICON: Record<StepStatus, React.ReactNode> = {
 
 /** Inline agent trace (HANDBOOK §5.4 rule 3): open while the agent works, a summary after. */
 export function AgentSteps({ item }: { item: AssistantItem }) {
-  const running = item.status === "thinking" || item.steps.some((s) => s.status === "running");
+  // Working until the reply ends: between tool rounds every step can be done while the model plans the next.
+  const running = item.status === "thinking" || item.status === "streaming" || item.steps.some((s) => s.status === "running");
   const [pinned, setPinned] = useState<boolean | null>(null);
   // Stays open for the whole run (tools + streamed reply), then folds into a summary.
   const open = pinned ?? (item.status === "thinking" || item.status === "streaming");

@@ -13,6 +13,14 @@ export interface Health {
   detail: string;
 }
 
+export interface Interpretation {
+  text: string;
+  pronunciation_hint?: string;
+  /** Which path answered in live mode: the A2A Interpreter Agent, or Orchu directly while it is down. */
+  via?: "a2a" | "orchu";
+  ms?: number;
+}
+
 export interface AylandApi {
   /** GET /api/trips/{trip_id} */
   getTrip(tripId: string): Promise<TripView>;
@@ -23,7 +31,7 @@ export interface AylandApi {
   /** POST /api/proposals/{id}/reject */
   rejectProposal(proposalId: string): Promise<void>;
   /** POST /api/interpret */
-  interpret(req: { text: string; source_lang: Lang; target_lang: Lang }): Promise<{ text: string; pronunciation_hint?: string }>;
+  interpret(req: { text: string; source_lang: Lang; target_lang: Lang }): Promise<Interpretation>;
   /**
    * GET /api/trips/{trip_id}/events → SSE of nudges and plan changes. Returns an unsubscribe function.
    * `onReconnect` fires when the stream comes back after a drop, so the caller can re-fetch what it missed.
