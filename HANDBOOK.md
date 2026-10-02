@@ -153,7 +153,7 @@ flowchart LR
 | MCP `travel-data` | Python, MCP SDK (FastMCP) | Weather (Open-Meteo plus scenario override), places, routes | 8201 |
 | MCP `merchant` | Python, MCP SDK (FastMCP) | Offer catalog search and availability, backed by MongoDB | 8202 |
 | A2A Booking Agent | Python, `a2a-sdk` | Hold, confirm and cancel bookings; writes to `bookings` | 8301 |
-| A2A Interpreter Agent | Python, `a2a-sdk`, Orchu MT (Novelsoft, mn ⇄ en), Claude for context | Translate Mongolian ⇄ English (other languages later) with travel context | 8302 |
+| A2A Interpreter Agent | Python, `a2a-sdk`, Orchu MT (Novelsoft, mn ⇄ en) | Translate Mongolian ⇄ English (other languages, and Claude for travel context, later) | 8302 |
 | Voice adapters | Module inside the orchestrator | Anir STT and tsuurAI TTS (Novelsoft, `api.oyu.so`) | none |
 | Database | MongoDB Atlas (free M0 cluster) | Users, trips, offers, proposals, bookings, memories, agent events | cloud |
 
@@ -283,7 +283,7 @@ AYLAND/
 │       └── lib/
 │           ├── api.ts        ← AylandApi (§8.4): mock or live, switched in the demo controls
 │           ├── types.ts      ← §8 shapes, snake_case
-│           ├── live/         ← HTTP/SSE client, WAV recorder, browser speech (English side)
+│           ├── live/         ← HTTP client (long polls), WAV recorder, browser speech (English side)
 │           └── mock/         ← in-browser scripted orchestrator (the stage-safe fallback)
 ├── backend/                  ← one Python project (uv), several processes
 │   ├── pyproject.toml
@@ -424,6 +424,9 @@ Tool inputs take points as `{ lon, lat }` (the model can't swap a named pair); o
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/chat` | `{ trip_id, message }` returns an SSE event stream (below) |
+| POST | `/api/chat/runs` | The same turn, started in the background: returns `{ run_id }` (what the web client uses) |
+| GET | `/api/chat/runs/{run_id}/events?cursor=` | Long poll (≤20 s): `{ events[], cursor, done }`, the same events as the SSE stream; works through proxies that buffer streams |
+| DELETE | `/api/chat/runs/{run_id}` | Cancels a turn (reset or mode switch mid-turn) |
 | POST | `/api/voice/transcribe` | Audio (multipart) and `lang`; returns `{ text }` |
 | POST | `/api/voice/speak` | `{ text, lang }`; returns audio |
 | POST | `/api/interpret` | `{ text, source_lang, target_lang }`; returns `{ text }` |
@@ -498,7 +501,7 @@ Tick a box only after the task's tests pass (offline first, then live, which spe
 
 > **M1 review (2026-10-02).** Seed completed (demo user, 28 merchants, 28 offers with descriptions, opening hours and slots on the three remaining days); `/api/demo/*` refuse when DEMO_MODE is off; voice adapters take `lang` (`ayland/voice`); SSE is sent `no-transform` with heartbeats and the web proxy no longer gzips it (it held live streams back); the trip event stream reconnects; failed turns show their reason.
 >
-> **Live slice (2026-10-02).** Live mode (demo controls → Live) runs on the real backend: Claude through the CLI login with `get_trip` and `get_budget_status` reading MongoDB, chat stored in `messages`, tool calls in `agent_events`, the rain nudge on the trip event stream, Anir for the mic, tsuurAI for Mongolian speech and Orchu for the interpreter. Options, proposals and booking still need M2–M4; until then the full magic moment runs in Mock mode. Measured: first rain question about 14 s (mostly thinking), follow-ups about 4 s.
+> **Live slice (2026-10-02).** Live mode (demo controls → Live) runs on the real backend: Claude through the CLI login with `get_trip` and `get_budget_status` reading MongoDB, chat stored in `messages`, tool calls in `agent_events`, the rain nudge on the trip event stream, Anir for the mic, tsuurAI for Mongolian speech and Orchu for the interpreter. Option cards are live since M2; proposals and booking need M3–M4, until then the full magic moment runs in Mock mode. Measured: first rain question about 14 s (mostly thinking), follow-ups about 4 s.
 >
 > **Web demo v0 (2026-09-30).** The UI side of M1-C1, M2-C1, M2-C2, M3-C1, M3-C2, M4-C1, M5-C1 (simulated voice) and M5-C2 is built against an in-browser mock orchestrator that emits the §8.4 events. Those boxes stay unticked until each is wired to the real orchestrator and passes its milestone's exit check. `frontend/e2e/` already runs the Act 1 to 4 flow and is the starting point for M4-ALL.
 
@@ -530,7 +533,7 @@ Tick a box only after the task's tests pass (offline first, then live, which spe
 - [ ] **M2-B1** MCP `travel-data`: `get_weather` (Open-Meteo plus the DEMO_MODE scenario), `search_places`, `get_route`. *(built 2026-10-03; offline tests pass, live data checked)*
 - [ ] **M2-B2** MCP `merchant`: `search_offers` (filters plus a 2dsphere "near" query), `get_offer`, `check_availability`. *(built 2026-10-03; offline tests pass, live Atlas checked)*
 - [ ] **M2-B3** Exercise both servers in the MCP Inspector and add smoke tests in `backend/tests`. *(smoke tests built: `tests/test_mcp_servers.py`; Inspector pass still to do)*
-- [ ] **M2-A1** The orchestrator loads the MCP tools (Tool Runner plus MCP helpers) and the local tools `get_trip` and `get_budget_status`. *(built 2026-10-03: HTTP MCP servers in the Claude Agent SDK options; tick after the live rain question)*
+- [ ] **M2-A1** The orchestrator loads the MCP tools (the Claude Agent SDK's `mcp_servers`, over HTTP) and the local tools `get_trip` and `get_budget_status`. *(built 2026-10-03: HTTP MCP servers in the Claude Agent SDK options; tick after the live rain question)*
 - [ ] **M2-A2** Emit `tool.start` and `tool.end` and write `agent_events`. *(built 2026-10-02; tick after the offline and live tests pass)*
 - [ ] **M2-A3** Prompt v1: compare options, show per-person and total cost, respect the budget, end with a next step. *(built 2026-10-03; tick after the live rain question)*
 - [ ] **M2-C1** Trace panel: a live list of agent steps with status and timings. *(UI built in v0; live tool events now named as in §8.2; tick after the live rain question)*
@@ -623,7 +626,7 @@ Tick a box only after the task's tests pass (offline first, then live, which spe
 - **Language:** English for code, comments and commits. Mongolian for user-facing text, kept in one place per app (`frontend/src/i18n/mn.ts`, `backend/ayland/orchestrator/prompts/`).
 - **Python:** type hints, Pydantic models, async I/O, `ruff format` and `ruff check`.
 - **TypeScript:** strict mode, the ESLint config from `create-next-app`, API types in `lib/api.ts` that mirror §8.
-- **Config:** secrets only come from env vars, and only `ayland/config.py` reads them.
+- **Config:** secrets only come from env vars, and in the backend only `ayland/config.py` reads them. The frontend has two build-time variables, `AYLAND_API_ORIGIN` and `NEXT_PUBLIC_AYLAND_MODE` (in `frontend/.env.local`, or the Vercel project), and no secrets.
 - **Logging:** every agent action goes to `agent_events`. It is both our demo trace and our debug log.
 
 ### Using AI coding assistants
@@ -655,6 +658,16 @@ npm test                 # backend unit tests;  npm run test:e2e for the browser
 Each server also runs alone (`npm run mcp:travel`, `npm run mcp:merchant`, `npm run agent:booking`, `npm run agent:interpreter`), and `/api/health` reports which ones answer. Try the MCP servers by hand in the MCP Inspector (Streamable HTTP, `http://localhost:8201/mcp` or `:8202/mcp`).
 
 **Live demo on this PC:** from a checkout of `demo` with its own `.env`, `powershell -ExecutionPolicy Bypass -File demo-up.ps1 -Build` starts the MCP servers on :8501 and :8502, the Booking and Interpreter Agents on :8401 and :8402, the API on :8100, the web app on :3100 and a Cloudflare quick tunnel, and prints the public URL. Locally everything streams; through the quick tunnel a chat reply arrives in one piece at the end (quick tunnels buffer streamed responses), while nudges still arrive (long poll). `-KeepTunnel` restarts the app without changing the URL; `-Stop` stops everything. Frontend build settings: `AYLAND_API_ORIGIN` (where `/api` goes, default `http://localhost:8000`) and `NEXT_PUBLIC_AYLAND_MODE` (`live` to start in live mode).
+
+**Public web app on Vercel** (stable URL; set up by the repo owner). The frontend deploys to Vercel; the backend stays on the demo PC (Claude runs through its CLI login) and is reached through the Cloudflare quick tunnel that `demo-up.ps1` opens. Mock mode needs no backend at all, so the public link always works.
+
+1. Vercel → **Add New → Project** → import `RedonaNova/AYLAND`. Project name **`ayland`** (gives `ayland.vercel.app` if it is free; otherwise e.g. `ayland-morgensonne`).
+2. **Root Directory:** `frontend` (framework Next.js is detected; build and install commands stay default).
+3. **Environment variable:** `AYLAND_API_ORIGIN` = the tunnel URL that `demo-up.ps1` prints (`https://….trycloudflare.com`, no trailing slash). Leave `NEXT_PUBLIC_AYLAND_MODE` unset so visitors start in Mock mode.
+4. **Settings → Git → Production Branch:** `demo`, so every push to `demo` redeploys the public app.
+5. When the tunnel URL changes (it only does when cloudflared restarts, e.g. after a reboot; `-KeepTunnel` keeps it), update `AYLAND_API_ORIGIN` and **Redeploy** (or `npx vercel env add AYLAND_API_ORIGIN production --force` then `npx vercel --prod` from `frontend/`).
+
+Live mode works through Vercel and the tunnel even though both may buffer streamed responses: chat turns run in the background on the orchestrator and the browser long-polls their events (`/api/chat/runs`), like the trip events.
 
 **Environment variables:** see [`.env.example`](.env.example). Secrets: `MONGODB_URI` and `OYU_API_KEY`. Claude needs no key (`CLAUDE_CLI_PATH` only if auto-detection fails). Only `backend/ayland/config.py` reads them.
 
