@@ -1,5 +1,6 @@
 """Trip-local dates and times. Hanoi is UTC+7 all year, so a fixed offset is exact (and needs no tz database)."""
 
+import re
 from datetime import date, datetime, timedelta, timezone
 
 from ayland.config import get_settings
@@ -29,6 +30,19 @@ def now_iso() -> str:
 
 def hhmm(iso: str) -> str:
     return iso[11:16]
+
+
+def parse_local(text: str) -> datetime | None:
+    """A moment as Hanoi time: ISO 8601 in any offset (or Z), or a bare "HH:MM" meaning today. None if it isn't
+    a time at all. For times the model hands back (a slot it picked), which can come in any of these forms."""
+    text = text.strip()
+    if re.fullmatch(r"\d{1,2}:\d{2}", text):
+        text = at(today(), text.zfill(5))
+    try:
+        moment = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return moment.astimezone(HANOI) if moment.tzinfo else moment.replace(tzinfo=HANOI)
 
 
 def minutes(iso: str) -> int:

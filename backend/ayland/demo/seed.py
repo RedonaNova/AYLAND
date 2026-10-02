@@ -99,6 +99,7 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
     await db.bookings.create_index([("trip_id", ASCENDING)])
     await db.messages.create_index([("trip_id", ASCENDING), ("ts", ASCENDING)])
     await db.agent_events.create_index([("trip_id", ASCENDING), ("ts", ASCENDING)])
+    await db.trip_versions.create_index([("trip_id", ASCENDING), ("version", ASCENDING)])
 
 
 async def _replace_all(db: AsyncDatabase, collection: str, docs: list[Doc]) -> None:
@@ -129,7 +130,7 @@ async def reset(db: AsyncDatabase) -> str:
     await _replace_all(db, "offers", data.offers)
     await db.bookings.delete_many({"trip_id": trip_id})
     await db.bookings.insert_many(data.bookings)
-    for collection in ("proposals", "messages", "agent_events"):
+    for collection in ("proposals", "messages", "agent_events", "trip_versions"):
         await db[collection].delete_many({"trip_id": trip_id})
     await db.demo_state.replace_one({"_id": "demo"}, {"_id": "demo", "weather": "clear"}, upsert=True)
     await ensure_indexes(db)

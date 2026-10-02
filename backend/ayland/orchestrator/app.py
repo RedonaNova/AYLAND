@@ -16,7 +16,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from mcp import Client as McpClient
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError
 
 from ayland import clock, voice
@@ -30,8 +30,9 @@ from ayland.mcp_servers.common import ToolError
 from ayland.mcp_servers.travel_data import weather
 from ayland.novelsoft import OyuNotConfigured
 
-from . import a2a, prompts
+from . import a2a, prompts, proposals
 from .agent import Event, agent
+from .audit import audit
 from .events import trip_events
 from .runs import Run, runs
 
@@ -81,14 +82,6 @@ async def voice_request_error(_: Request, err: voice.VoiceRequestError) -> JSONR
 @app.exception_handler(OyuNotConfigured)
 async def not_configured(_: Request, err: RuntimeError) -> JSONResponse:
     return JSONResponse({"detail": str(err)}, 503)
-
-
-async def audit(trip_id: str, run_id: str, **fields: Any) -> None:
-    """Best-effort agent_events write: a failed audit log must never break a chat turn or a translation."""
-    try:
-        await repo.log_event(get_db(), trip_id, run_id, **fields)
-    except (PyMongoError, MongoNotConfigured, ValidationError) as err:
-        logger.warning("agent_events write failed: %s", err if isinstance(err, ValidationError) else explain(err))
 
 
 def require_demo_mode() -> None:
@@ -319,6 +312,15 @@ async def chat_run_events(run_id: str, cursor: Annotated[int, Query(ge=0)] = 0) 
 async def cancel_chat_run(run_id: str) -> dict[str, bool]:
     """The traveler left mid-turn (reset, mode switch): stop it, so the next question doesn't wait for it."""
     return {"cancelled": runs.cancel(run_id)}
+
+
+@app.post("/api/proposals/{proposal_id}/reject")
+async def reject_proposal(proposal_id: str) -> dict[str, Any]:
+    """The travelers declined the card (§8.4). Only an open proposal can be declined."""
+    proposal = await proposals.reject(proposal_id)
+    if proposal is None:
+        raise HTTPException(409, "This proposal is no longer open (decided or replaced by a newer one).")
+    return jsonable_encoder(proposal)
 
 
 Lang = Literal["mn", "en"]
