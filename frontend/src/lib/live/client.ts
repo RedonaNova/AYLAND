@@ -1,4 +1,5 @@
-// HTTP/SSE client for the FastAPI orchestrator (HANDBOOK §8.4), reached through the Next.js /api proxy.
+// HTTP client for the FastAPI orchestrator (HANDBOOK §8.4), reached through the Next.js /api proxy.
+// Chat streams as SSE; trip events arrive by long poll.
 
 import { mn } from "@/i18n/mn";
 import type { AylandApi } from "../api";
@@ -10,6 +11,13 @@ const TRIP_EVENTS = ["nudge", "plan.updated", "booking.confirmed"] as const;
 const REQUIRED = ["mongodb", "claude_cli", "oyu"] as const;
 const OPTIONAL = ["a2a_booking"] as const;
 const RETRY_MS = { first: 1000, max: 15_000 };
+
+interface TripEventPage {
+  events: AgentEvent[];
+  cursor: string;
+  /** The backend restarted since the last cursor: re-fetch what may have changed. */
+  reset: boolean;
+}
 
 function postJsonInit(body: unknown): RequestInit {
   return { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
@@ -58,42 +66,33 @@ export function createLiveClient(base: string): AylandApi {
     async rejectProposal() {},
     interpret: (req) => postJson("/interpret", req),
     tripEvents(tripId, onEvent, onReconnect) {
-      // EventSource retries a dropped stream by itself, but gives up for good when a retry gets an error
-      // response (the proxy answers 500 while the backend restarts). Then we reopen it, with backoff.
-      let source: EventSource | undefined;
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      let delay = RETRY_MS.first;
-      let opened = false;
-      let stopped = false;
-      const connect = () => {
-        const current = new EventSource(`${base}/trips/${tripId}/events`);
-        source = current;
-        current.onopen = () => {
-          delay = RETRY_MS.first;
-          if (opened) onReconnect?.();
-          opened = true;
-        };
-        current.onerror = () => {
-          if (stopped || current.readyState !== EventSource.CLOSED) return;
-          timer = setTimeout(connect, delay);
-          delay = Math.min(delay * 2, RETRY_MS.max);
-        };
-        for (const type of TRIP_EVENTS) {
-          current.addEventListener(type, (message) => {
-            try {
-              onEvent({ type, data: JSON.parse((message as MessageEvent<string>).data) } as AgentEvent);
-            } catch {
-              // A malformed frame is skipped; the next plan or trip load corrects the view.
+      // A long poll, not EventSource: Cloudflare quick tunnels buffer streamed responses until they end, so an
+      // endless SSE stream never delivers a nudge through the public URL. A poll returns as soon as an event exists.
+      const controller = new AbortController();
+      void (async () => {
+        let cursor = "";
+        let delay = RETRY_MS.first;
+        let failed = false;
+        while (!controller.signal.aborted) {
+          try {
+            const query = new URLSearchParams({ cursor }).toString();
+            const page = await json<TripEventPage>(`/trips/${tripId}/events/poll?${query}`, { signal: controller.signal });
+            if (cursor && (failed || page.reset)) onReconnect?.(); // back after an outage or a backend restart
+            cursor = page.cursor;
+            failed = false;
+            delay = RETRY_MS.first;
+            for (const event of page.events) {
+              if ((TRIP_EVENTS as readonly string[]).includes(event.type)) onEvent(event);
             }
-          });
+          } catch {
+            if (controller.signal.aborted) return;
+            failed = true;
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            delay = Math.min(delay * 2, RETRY_MS.max);
+          }
         }
-      };
-      connect();
-      return () => {
-        stopped = true;
-        clearTimeout(timer);
-        source?.close();
-      };
+      })();
+      return () => controller.abort();
     },
     async demoReset() {
       await request("/demo/reset", { method: "POST" });

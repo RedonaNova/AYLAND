@@ -8,6 +8,7 @@ import pytest
 
 from ayland.config import Settings
 from ayland.orchestrator import app as orchestrator
+from ayland.orchestrator.events import TripEvents
 
 
 @pytest.fixture
@@ -57,3 +58,23 @@ async def test_heartbeat_is_silent_for_a_fast_stream() -> None:
             yield frame
 
     assert [frame async for frame in orchestrator.with_heartbeat(fast(), every=1)] == ["a", "b", "c"]
+
+
+async def test_trip_event_poll_delivers_what_was_published_after_the_cursor() -> None:
+    bus = TripEvents()
+    first = await bus.wait("t", "", timeout_s=1)
+    assert first["events"] == [] and not first["reset"]
+    bus.publish("t", {"type": "nudge", "data": {"text": "Бороо"}})
+    bus.publish("other", {"type": "nudge", "data": {"text": "not ours"}})
+    second = await bus.wait("t", first["cursor"], timeout_s=1)
+    assert [e["data"]["text"] for e in second["events"]] == ["Бороо"]
+    assert (await bus.wait("t", second["cursor"], timeout_s=0.01))["events"] == []
+
+
+async def test_trip_event_poll_wakes_on_publish_and_flags_a_restart() -> None:
+    bus = TripEvents()
+    cursor = (await bus.wait("t", "", timeout_s=1))["cursor"]
+    asyncio.get_running_loop().call_later(0.02, bus.publish, "t", {"type": "plan.updated", "data": {}})
+    woke = await bus.wait("t", cursor, timeout_s=5)
+    assert [e["type"] for e in woke["events"]] == ["plan.updated"]
+    assert (await TripEvents().wait("t", cursor, timeout_s=1))["reset"]  # another process: re-fetch the trip

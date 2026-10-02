@@ -36,6 +36,7 @@ logger = logging.getLogger("ayland.orchestrator")
 SSE_HEADERS = {"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"}
 NUDGE_DELAY_S = 1.4
 HEARTBEAT_S = 15
+POLL_WAIT_S = 20  # under the proxy and tunnel idle limits
 HEALTH_TIMEOUT_S = 2.0
 
 
@@ -199,6 +200,13 @@ async def trip_event_stream(trip_id: str) -> StreamingResponse:
             trip_events.unsubscribe(trip_id, queue)
 
     return stream(events())
+
+
+@app.get("/api/trips/{trip_id}/events/poll")
+async def trip_event_poll(trip_id: str, cursor: str = "") -> dict[str, Any]:
+    """The trip event stream as a long poll (what the web client uses): Cloudflare quick tunnels buffer streamed
+    responses until they end, so an endless SSE stream would never deliver a nudge through the public URL."""
+    return jsonable_encoder(await trip_events.wait(trip_id, cursor, POLL_WAIT_S))
 
 
 class ChatRequest(BaseModel):
