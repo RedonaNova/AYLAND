@@ -278,7 +278,7 @@ export default function InterpreterPage() {
 
 function LangBadge({ lang }: { lang: Lang }) {
   return (
-    <span className={cn("rounded px-1 py-px font-mono text-[9px] font-bold", lang === "mn" ? "bg-sun-400/20 text-sun-300" : "bg-mint-400/20 text-mint-400")}>
+    <span className={cn("rounded px-1 py-px text-[10px] font-bold", lang === "mn" ? "bg-sun-400/20 text-sun-300" : "bg-mint-400/20 text-mint-400")}>
       {lang.toUpperCase()}
     </span>
   );
@@ -313,15 +313,15 @@ function Stage({
           <motion.div key="translating" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="relative flex flex-col items-center gap-3 text-fg-muted">
             <LoaderCircle className="size-6 animate-spin text-dusk-500" />
             <span className="text-sm">{mn.interpreter.translating}</span>
-            <span className="rounded-full bg-dusk-500/15 px-2.5 py-1 font-mono text-[10px] text-dusk-500">{mn.interpreter.via} · translate</span>
+            <span className="rounded-full bg-dusk-500/15 px-2.5 py-1 text-[11px] font-medium text-dusk-500">{mn.interpreter.via} · translate</span>
           </motion.div>
         ) : latest ? (
           <motion.div key={latest.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} className="relative">
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">
+            <div className="flex items-center gap-2 text-[12px] font-semibold text-fg-subtle">
               <LangBadge lang={LANG[latest.side].from} /> {latest.side === "me" ? mn.interpreter.me : mn.interpreter.them}
             </div>
             <p className="mt-2 text-sm leading-relaxed text-fg-muted sm:text-base">{latest.source}</p>
-            <div className="mt-5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">
+            <div className="mt-5 flex items-center gap-2 text-[12px] font-semibold text-fg-subtle">
               <LangBadge lang={LANG[latest.side].to} />
             </div>
             <p className="mt-2 text-3xl font-semibold leading-tight sm:text-[44px] sm:leading-[1.15]">

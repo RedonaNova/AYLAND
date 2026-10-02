@@ -36,7 +36,7 @@ export function ApprovalCard({ proposal, state, offer, travelers, disabled, onAp
       {open && (
         <div className="pointer-events-none absolute inset-0 animate-shimmer bg-[linear-gradient(110deg,transparent_30%,rgb(255_255_255/0.05)_50%,transparent_70%)] bg-[length:200%_100%]" />
       )}
-      <div className="relative flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]">
+      <div className="relative flex items-center gap-2 text-[12px] font-semibold">
         <ShieldCheck className="size-4 text-sun-400" />
         <span className="text-sunrise">{mn.approval.badge}</span>
         <StateChip state={state} />
@@ -123,7 +123,7 @@ function StateChip({ state }: { state: ProposalState }) {
 function Field({ label, value, hint, strong }: { label: string; value: string; hint?: string; strong?: boolean }) {
   return (
     <div className="rounded-xl bg-ink-950/50 px-3 py-2">
-      <dt className="text-[10px] uppercase tracking-wider text-fg-subtle">{label}</dt>
+      <dt className="text-[11.5px] text-fg-subtle">{label}</dt>
       <dd className={cn("mt-0.5 leading-snug", strong ? "text-base font-semibold tabular-nums" : "text-fg")}>{value}</dd>
       {hint && <dd className="truncate text-[11px] text-fg-subtle">{hint}</dd>}
     </div>
@@ -174,7 +174,7 @@ export function BookingTicket({ booking, offer }: { booking: Booking; offer: Off
           <Ticket className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-mint-400">{mn.booking.confirmed}</div>
+          <div className="text-[12px] font-semibold text-mint-400">{mn.booking.confirmed}</div>
           <div className="truncate text-[15px] font-semibold">{offer?.title_mn}</div>
           <div className="text-xs text-fg-subtle">A2A · Booking Agent · {usd(booking.total.amount)}</div>
         </div>
@@ -185,7 +185,7 @@ export function BookingTicket({ booking, offer }: { booking: Booking; offer: Off
       </div>
       <div className="flex items-center justify-between gap-3 p-4">
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-fg-subtle">{mn.booking.code}</div>
+          <div className="text-[11.5px] text-fg-subtle">{mn.booking.code}</div>
           <div className="font-mono text-xl font-semibold tracking-[0.18em] text-fg">{booking.confirmation_code}</div>
           <div className="mt-0.5 text-[11px] text-fg-subtle">
             {mn.booking.consent[booking.consent.method]} · {hhmm(booking.consent.approved_at)}

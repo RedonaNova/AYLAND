@@ -14,7 +14,7 @@ export function BudgetMeter({ budget }: { budget: DayBudget }) {
 
   return (
     <div className="surface rounded-2xl p-4">
-      <div className="text-[11px] font-medium uppercase tracking-wider text-fg-subtle">{mn.budget.title}</div>
+      <div className="text-[12px] font-medium text-fg-subtle">{mn.budget.title}</div>
       <div className="mt-1 flex items-baseline gap-1.5">
         <AnimatedUsd
           value={budget.remaining}

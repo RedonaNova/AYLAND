@@ -70,16 +70,24 @@ function ChatHeader({ onOpenToday }: { onOpenToday: () => void }) {
       <SunMark className="size-8 lg:hidden" />
       <div className="min-w-0">
         <div className="font-display text-[15px] font-semibold tracking-wide">{mn.brand.name}</div>
-        <div className="flex items-center gap-1.5 text-[11px] text-fg-muted">
+        <div className="flex min-w-0 items-center gap-1.5 text-[11.5px] text-fg-muted">
           <span className="relative flex size-1.5">
             <span className={busy ? "absolute inset-0 animate-ping rounded-full bg-sun-400" : "hidden"} />
             <span className={cn("relative size-1.5 rounded-full", busy ? "bg-sun-400" : "bg-mint-400")} />
           </span>
-          {busy
-            ? mn.chat.stepsRunning
-            : view
-              ? `${mn.trip.city} · ${mn.trip.dayOf(tripDay(view), view.trip.days.length)} · ${mn.trip.travelers(view.trip.party_size)}`
-              : mn.trip.city}
+          <span className="truncate">
+            {busy ? (
+              mn.chat.stepsRunning
+            ) : view ? (
+              <>
+                {mn.trip.city}, {mn.trip.dayOf(tripDay(view), view.trip.days.length)}
+                {/* The party size is in the header avatars on wide screens; phones keep the line short. */}
+                <span className="hidden sm:inline">, {mn.trip.travelers(view.trip.party_size)}</span>
+              </>
+            ) : (
+              mn.trip.city
+            )}
+          </span>
         </div>
       </div>
       {view && remaining !== null && (

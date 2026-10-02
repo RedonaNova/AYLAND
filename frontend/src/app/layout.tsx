@@ -1,12 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Unbounded } from "next/font/google";
+import { Manrope, Unbounded } from "next/font/google";
 import { AppShell } from "@/components/shell/AppShell";
 import { Providers } from "@/components/shell/Providers";
 import "./globals.css";
 
 // Mongolian needs cyrillic-ext (Ө ө Ү ү); Hanoi place names need the Vietnamese subset.
-const inter = Inter({
-  variable: "--font-inter",
+const manrope = Manrope({
+  variable: "--font-body",
   subsets: ["latin", "cyrillic", "cyrillic-ext", "vietnamese"],
 });
 
@@ -29,7 +29,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="mn" className={`${inter.variable} ${unbounded.variable} h-full`}>
+    <html lang="mn" className={`${manrope.variable} ${unbounded.variable} h-full`}>
       <body className="h-full overflow-hidden">
         <Providers>
           <AppShell>{children}</AppShell>
