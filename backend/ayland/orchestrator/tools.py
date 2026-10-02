@@ -5,6 +5,8 @@ Each tool returns JSON with a short `summary` for the trace panel.
 """
 
 import json
+import re
+from datetime import datetime
 from typing import Any
 
 from claude_agent_sdk import McpSdkServerConfig, SdkMcpTool, create_sdk_mcp_server, tool
@@ -96,25 +98,41 @@ class OptionError(ValueError):
     """An option the model asked to show doesn't match the catalog (unknown offer, slot not offered)."""
 
 
+def _slot_time(text: str) -> datetime | None:
+    """The slot the model meant, as a local datetime: the ISO `start` from search_offers in any offset (or Z),
+    or a bare "HH:MM" for today. None if it isn't a time at all."""
+    bare = text.strip()
+    if re.fullmatch(r"\d{1,2}:\d{2}", bare):
+        text = clock.at(clock.today(), bare.zfill(5))
+    try:
+        moment = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return moment.astimezone(clock.HANOI) if moment.tzinfo else moment.replace(tzinfo=clock.HANOI)
+
+
 async def build_options(trip_id: str, picks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """§8.4 `options` from the model's picks: the catalog supplies the offer, the slot and the price, so a card
     can never show a price or time the merchant didn't publish (§5.4 rule 1)."""
     if not 1 <= len(picks) <= MAX_OPTIONS:
         raise OptionError(f"Show 1 to {MAX_OPTIONS} options.")
+    ids = [pick["offer_id"] for pick in picks]
+    if len(set(ids)) != len(ids):
+        raise OptionError("Show each offer once; pick its best slot.")
     db = get_db()
     trip = await repo.get_trip(db, trip_id)
-    ids = [pick["offer_id"] for pick in picks]
     offers = {o["_id"]: o for o in await db.offers.find({"_id": {"$in": ids}}, {"embedding": 0}).to_list()}
     options = []
     for rank, pick in enumerate(picks, 1):
         offer = offers.get(pick["offer_id"])
         if offer is None:
             raise OptionError(f"No offer {pick['offer_id']!r}; use offer_id values from search_offers.")
+        wanted = _slot_time(str(pick["slot_start"]))
         # Only a slot search_offers could have listed: not past, not started, with room for the whole party.
-        day = str(pick["slot_start"])[:10]
+        day = wanted.date().isoformat() if wanted else ""
         not_before = clock.now_iso() if day == clock.today() else None
         fits = open_slots(offer, day, trip["party_size"], None, not_before) if day >= clock.today() else []
-        slot = next((s for s in fits if s.start == pick["slot_start"]), None)
+        slot = next((s for s in fits if datetime.fromisoformat(s.start) == wanted), None)
         if slot is None:
             raise OptionError(
                 f"{pick['offer_id']} has no open slot for {trip['party_size']} at {pick['slot_start']}; "

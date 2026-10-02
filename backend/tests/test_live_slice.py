@@ -71,8 +71,11 @@ def test_sse_frames_an_event() -> None:
 
 def test_tool_summary_comes_from_the_json_payload() -> None:
     content = [{"type": "text", "text": json.dumps({"summary": "Үлдэгдэл $100", "remaining": 100})}]
-    assert _summary(content) == "Үлдэгдэл $100"
-    assert _summary("plain text result") == "plain text result"
+    assert _summary(content)[0] == "Үлдэгдэл $100"
+    assert _summary("plain text result") == ("plain text result", "plain text result")
+    # A tool error shows a Mongolian line in the trace; the English reason stays for agent_events.
+    summary, detail = _summary("Error executing tool search_places: OpenStreetMap is down", is_error=True)
+    assert summary == "Хэрэгсэл хариулсангүй" and detail.startswith("Error executing tool")
 
 
 def test_split_for_tts_keeps_order_around_an_overlong_sentence() -> None:
