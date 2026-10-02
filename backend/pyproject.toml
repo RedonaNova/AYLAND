@@ -5,6 +5,7 @@ description = "AYLAND orchestrator, MCP servers and A2A agents (HANDBOOK §5, §
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "a2a-sdk[http-server]>=1.2.1",
     "claude-agent-sdk>=0.2.163",
     "fastapi>=0.142.2",
     "httpx>=0.28.1",

@@ -1,6 +1,6 @@
 # Starts the live demo on this PC as detached processes that outlive the terminal:
-#   orchestrator API :8100  ->  web :3100 (proxies /api to :8100)  ->  Cloudflare quick tunnel (public URL)
-# Ports differ from development (3000/8000) so both can run at once.
+#   Booking Agent (A2A) :8401  <-  orchestrator API :8100  <-  web :3100 (proxies /api)  <-  Cloudflare quick tunnel
+# Ports differ from development (3000/8000/8301) so both can run at once.
 #
 #   powershell -ExecutionPolicy Bypass -File demo-up.ps1 -Build      # first time, or after pulling
 #   powershell -ExecutionPolicy Bypass -File demo-up.ps1 -KeepTunnel  # restart app, keep the same URL
@@ -13,6 +13,7 @@ $logs = Join-Path $env:LOCALAPPDATA "ayland\demo-logs"
 New-Item -ItemType Directory -Force $logs | Out-Null
 $webPort = 3100
 $apiPort = 8100
+$bookingPort = 8401
 
 function Stop-Matching([string]$pattern) {
     Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine -like $pattern } |
@@ -20,6 +21,7 @@ function Stop-Matching([string]$pattern) {
 }
 
 Stop-Matching "*uvicorn*ayland.orchestrator.app*--port $apiPort*"
+Stop-Matching "*uvicorn*ayland.a2a_agents.booking.server*--port $bookingPort*"
 Stop-Matching "*next*start*-p*$webPort*"
 if (-not $KeepTunnel) { Stop-Matching "*cloudflared*--url*localhost:$webPort*" }
 if ($Stop) { "Demo stopped."; return }
@@ -33,6 +35,11 @@ if ($Build) {
     npm --prefix (Join-Path $root "frontend") run build
 }
 
+# Child processes inherit these, so the agent card and the orchestrator agree on the demo port.
+$env:A2A_BOOKING_URL = "http://localhost:$bookingPort"
+Start-Process -FilePath "uv" -WindowStyle Hidden -WorkingDirectory (Join-Path $root "backend") `
+    -ArgumentList "run", "uvicorn", "ayland.a2a_agents.booking.server:app", "--port", "$bookingPort" `
+    -RedirectStandardOutput "$logsooking.log" -RedirectStandardError "$logsooking.err.log" | Out-Null
 Start-Process -FilePath "uv" -WindowStyle Hidden -WorkingDirectory (Join-Path $root "backend") `
     -ArgumentList "run", "uvicorn", "ayland.orchestrator.app:app", "--port", "$apiPort", "--timeout-graceful-shutdown", "3" `
     -RedirectStandardOutput "$logs\api.log" -RedirectStandardError "$logs\api.err.log" | Out-Null
@@ -55,5 +62,5 @@ for ($i = 0; $i -lt 40 -and -not $url; $i++) {
     $hit = Select-String -Path "$logs\tunnel.err.log" -Pattern "https://[a-z0-9-]+\.trycloudflare\.com" -ErrorAction SilentlyContinue | Select-Object -Last 1
     if ($hit) { $url = $hit.Matches[0].Value }
 }
-"Web  http://localhost:$webPort   API  http://localhost:$apiPort   logs  $logs"
+"Web  http://localhost:$webPort   API  http://localhost:$apiPort   Booking  http://localhost:$bookingPort   logs  $logs"
 if ($url) { "Public URL: $url" } else { "Tunnel URL not found yet; see $logs\tunnel.err.log" }

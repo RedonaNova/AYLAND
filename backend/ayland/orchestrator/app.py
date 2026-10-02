@@ -9,12 +9,13 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Any, Literal
 
 import httpx
+from a2a.client.errors import A2AClientError
 from claude_agent_sdk import ClaudeSDKError
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from pymongo.errors import PyMongoError
 
 from ayland import clock
@@ -27,7 +28,7 @@ from ayland.llm.claude import ClaudeCliNotFound, find_cli
 from ayland.novelsoft import OyuNotConfigured
 from ayland.voice import oyu as voice
 
-from . import prompts
+from . import a2a, prompts
 from .agent import Event, agent
 from .events import trip_events
 
@@ -35,6 +36,7 @@ logger = logging.getLogger("ayland.orchestrator")
 SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 NUDGE_DELAY_S = 1.4
 HEARTBEAT_S = 15
+HEALTH_TIMEOUT_S = 2.0
 
 
 @asynccontextmanager
@@ -69,6 +71,14 @@ async def mongo_error(_: Request, err: PyMongoError) -> JSONResponse:
 @app.exception_handler(OyuNotConfigured)
 async def not_configured(_: Request, err: RuntimeError) -> JSONResponse:
     return JSONResponse({"detail": str(err)}, 503)
+
+
+async def audit(trip_id: str, run_id: str, **fields: Any) -> None:
+    """Best-effort agent_events write: a failed audit log must never break a chat turn or a translation."""
+    try:
+        await repo.log_event(get_db(), trip_id, run_id, **fields)
+    except (PyMongoError, MongoNotConfigured, ValidationError) as err:
+        logger.warning("agent_events write failed: %s", err if isinstance(err, ValidationError) else explain(err))
 
 
 def sse(item: Event) -> str:
@@ -108,6 +118,12 @@ async def health() -> dict[str, object]:
     except ClaudeCliNotFound as err:
         checks["claude_cli"] = {"ok": False, "error": str(err)}
     checks["oyu"] = {"ok": settings.oyu_api_key is not None, "base_url": settings.oyu_base_url}
+    try:
+        async with httpx.AsyncClient(timeout=HEALTH_TIMEOUT_S) as http:
+            reply = await a2a.ping(settings.a2a_booking_url, http=http)
+        checks["a2a_booking"] = {"ok": bool(reply.data.get("pong")), "ping_ms": round(reply.ms)}
+    except (httpx.HTTPError, A2AClientError, a2a.A2AReplyMissing) as err:
+        checks["a2a_booking"] = {"ok": False, "error": f"{type(err).__name__} at {settings.a2a_booking_url}"}
     checks["demo_mode"] = settings.demo_mode
     return checks
 
@@ -175,8 +191,7 @@ async def chat(body: ChatRequest) -> StreamingResponse:
                 if item["type"] == "message.delta":
                     reply += data["text"]
                 elif item["type"] == "tool.end":
-                    await repo.log_event(
-                        db,
+                    await audit(
                         body.trip_id,
                         run_id,
                         type="tool",
@@ -209,19 +224,15 @@ async def interpret(body: InterpretRequest) -> dict[str, Any]:
     if body.source_lang == body.target_lang:
         return {"text": body.text}
     result = await orchu.translate(body.text, body.source_lang, body.target_lang)
-    try:
-        await repo.log_event(
-            get_db(),
-            repo.TRIP_ID,
-            "interpreter",
-            type="tool",
-            name="orchu.translate",
-            output_summary=f"{body.source_lang} → {body.target_lang}",
-            ok=True,
-            ms=round(result.ms),
-        )
-    except PyMongoError as err:  # the audit log must not block a translation
-        logger.warning("agent_events write failed: %s", explain(err))
+    await audit(
+        repo.TRIP_ID,
+        "interpreter",
+        type="tool",
+        name="orchu.translate",
+        output_summary=f"{body.source_lang} → {body.target_lang}",
+        ok=True,
+        ms=round(result.ms),
+    )
     return {"text": result.text}
 
 

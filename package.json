@@ -4,8 +4,10 @@
   "description": "AYLAND: AI travel companion for Mongolian travelers (Team Morgensonne). See HANDBOOK.md.",
   "scripts": {
     "setup": "npm install && npm --prefix frontend install && uv --directory backend sync",
-    "dev": "concurrently -k -n web,api -c magenta,cyan \"npm --prefix frontend run dev\" \"npm run api\"",
+    "dev": "concurrently -k -n web,api,booking -c magenta,cyan,yellow \"npm --prefix frontend run dev\" \"npm run api\" \"npm run agent:booking\"",
     "api": "uv --directory backend run uvicorn ayland.orchestrator.app:app --reload --port 8000 --timeout-graceful-shutdown 3",
+    "agent:booking": "uv --directory backend run uvicorn ayland.a2a_agents.booking.server:app --port 8301",
+    "seed": "uv --directory backend run python -m scripts.seed",
     "build": "npm --prefix frontend run build",
     "start": "npm --prefix frontend run start",
     "lint": "npm --prefix frontend run lint && uv --directory backend run ruff check .",
@@ -14,8 +16,7 @@
     "test:e2e": "npm --prefix frontend run test:e2e",
     "check": "uv --directory backend run python -m spikes.check_services",
     "spike:llm": "uv --directory backend run python -m spikes.llm_spike",
-    "spike:voice": "uv --directory backend run python -m spikes.voice_spike",
-    "seed": "uv --directory backend run python -m scripts.seed"
+    "spike:voice": "uv --directory backend run python -m spikes.voice_spike"
   },
   "devDependencies": {
     "concurrently": "^10.0.5"
