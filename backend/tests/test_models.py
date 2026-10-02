@@ -10,17 +10,26 @@ TODAY = "2026-10-05"
 
 
 def test_the_seed_satisfies_the_contract() -> None:
-    trip, offers, bookings = materialize(load_seed(), TODAY)
-    models.Trip.model_validate(trip)
-    for offer in offers:
-        models.Offer.model_validate(offer)
-    for booking in bookings:
-        models.Booking.model_validate(booking)
+    materialize(load_seed(), TODAY).validated()
+
+
+def test_the_seed_is_a_complete_demo_world() -> None:
+    """M1-B2: the demo user, the merchants, and 25 to 30 offers with a good share of rainy-day options."""
+    data = materialize(load_seed(), TODAY)
+    assert data.user["_id"] == data.trip["owner_id"]
+    assert 25 <= len(data.offers) <= 30
+    assert {o["merchant_id"] for o in data.offers} == {m["_id"] for m in data.merchants}
+    assert sum("rainy-day" in o["tags"] for o in data.offers) >= len(data.offers) // 2
+    assert all(o["description"] and o["opening_hours"] for o in data.offers)
+
+
+def test_offer_slots_repeat_on_each_slot_day() -> None:
+    puppet = next(o for o in materialize(load_seed(), TODAY).offers if o["_id"] == "off_puppet")
+    assert [s["start"][:10] for s in puppet["slots"]][::3] == ["2026-10-05", "2026-10-06", "2026-10-07"]
 
 
 def test_to_mongo_keeps_the_section_8_formats() -> None:
-    trip, _, _ = materialize(load_seed(), TODAY)
-    doc = models.Trip.model_validate(trip).to_mongo()
+    doc = models.Trip.model_validate(materialize(load_seed(), TODAY).trip).to_mongo()
     assert doc["_id"] == "trip_hanoi_demo"
     item = doc["days"][2]["items"][2]
     assert item["start"] == "2026-10-05T12:00:00+07:00"
@@ -42,7 +51,7 @@ def test_money_needs_per_and_rejects_negative_amounts() -> None:
 
 
 def test_plan_item_times_need_an_offset() -> None:
-    trip, _, _ = materialize(load_seed(), TODAY)
+    trip = materialize(load_seed(), TODAY).trip
     item = dict(trip["days"][2]["items"][0], start="2026-10-05T08:00:00")
     with pytest.raises(ValidationError):
         models.PlanItem.model_validate(item)

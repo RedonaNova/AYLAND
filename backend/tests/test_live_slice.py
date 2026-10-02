@@ -13,17 +13,16 @@ TODAY = "2026-10-05"
 
 
 def _trip() -> dict:
-    trip, _, _ = materialize(load_seed(), TODAY)
-    return trip
+    return materialize(load_seed(), TODAY).trip
 
 
 def test_seed_puts_day_three_on_today_with_offset_times() -> None:
-    trip, offers, bookings = materialize(load_seed(), TODAY)
-    assert [day["date"] for day in trip["days"]][2] == TODAY
-    lunch = next(i for i in repo.day_items(trip, TODAY) if i["item_id"] == "d3-3")
+    data = materialize(load_seed(), TODAY)
+    assert [day["date"] for day in data.trip["days"]][2] == TODAY
+    lunch = next(i for i in repo.day_items(data.trip, TODAY) if i["item_id"] == "d3-3")
     assert lunch["start"] == "2026-10-05T12:00:00+07:00"
-    assert offers[0]["slots"][0]["start"].startswith(TODAY)
-    assert all(b["trip_id"] == trip["_id"] for b in bookings)
+    assert data.offers[0]["slots"][0]["start"].startswith(TODAY)
+    assert all(b["trip_id"] == data.trip["_id"] for b in data.bookings)
 
 
 def test_day_budget_matches_the_demo_story() -> None:
