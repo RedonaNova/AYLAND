@@ -108,7 +108,7 @@ function OptionCard({
         <span className="flex items-center gap-1 text-fg-muted">
           <TravelIcon className="size-3.5" />
           {travel.mode === "walk" ? mn.option.walk(travel.duration_min) : mn.option.drive(travel.duration_min)}
-          {travel.cost && <span className="text-fg-subtle">{mn.option.taxi(usd(travel.cost.amount))}</span>}
+          {travel.cost && <span className="text-fg-subtle">{mn.option.taxi(exactUsd(travel.cost.amount))}</span>}
         </span>
         <button
           type="button"
