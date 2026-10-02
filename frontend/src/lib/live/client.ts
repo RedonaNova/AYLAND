@@ -6,6 +6,10 @@ import type { AgentEvent, TripView } from "../types";
 import { readSse } from "./sse";
 
 const TRIP_EVENTS = ["nudge", "plan.updated", "booking.confirmed"] as const;
+/** Without these the chat can't work; the rest are reported as warnings. */
+const REQUIRED = ["mongodb", "claude_cli", "oyu"] as const;
+const OPTIONAL = ["a2a_booking"] as const;
+const RETRY_MS = { first: 1000, max: 15_000 };
 
 function postJsonInit(body: unknown): RequestInit {
   return { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
@@ -36,8 +40,8 @@ export function createLiveClient(base: string): AylandApi {
     return json<T>(path, postJsonInit(body));
   }
 
-  async function* events(path: string, body: unknown): AsyncGenerator<AgentEvent> {
-    const response = await fetch(`${base}${path}`, postJsonInit(body));
+  async function* events(path: string, body: unknown, signal?: AbortSignal): AsyncGenerator<AgentEvent> {
+    const response = await fetch(`${base}${path}`, { ...postJsonInit(body), signal });
     if (!response.ok || !response.body) {
       yield { type: "error", data: { message: await reason(response) } };
       return;
@@ -47,20 +51,49 @@ export function createLiveClient(base: string): AylandApi {
 
   return {
     getTrip: (tripId) => json<TripView>(`/trips/${tripId}`),
-    chat: (req) => events("/chat", req),
+    chat: (req, signal) => events("/chat", req, signal),
     async *approveProposal() {
       yield { type: "error", data: { message: mn.live.notYet } };
     },
     async rejectProposal() {},
     interpret: (req) => postJson("/interpret", req),
-    tripEvents(tripId, onEvent) {
-      const source = new EventSource(`${base}/trips/${tripId}/events`);
-      for (const type of TRIP_EVENTS) {
-        source.addEventListener(type, (message) => {
-          onEvent({ type, data: JSON.parse((message as MessageEvent<string>).data) } as AgentEvent);
-        });
-      }
-      return () => source.close();
+    tripEvents(tripId, onEvent, onReconnect) {
+      // EventSource retries a dropped stream by itself, but gives up for good when a retry gets an error
+      // response (the proxy answers 500 while the backend restarts). Then we reopen it, with backoff.
+      let source: EventSource | undefined;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let delay = RETRY_MS.first;
+      let opened = false;
+      let stopped = false;
+      const connect = () => {
+        const current = new EventSource(`${base}/trips/${tripId}/events`);
+        source = current;
+        current.onopen = () => {
+          delay = RETRY_MS.first;
+          if (opened) onReconnect?.();
+          opened = true;
+        };
+        current.onerror = () => {
+          if (stopped || current.readyState !== EventSource.CLOSED) return;
+          timer = setTimeout(connect, delay);
+          delay = Math.min(delay * 2, RETRY_MS.max);
+        };
+        for (const type of TRIP_EVENTS) {
+          current.addEventListener(type, (message) => {
+            try {
+              onEvent({ type, data: JSON.parse((message as MessageEvent<string>).data) } as AgentEvent);
+            } catch {
+              // A malformed frame is skipped; the next plan or trip load corrects the view.
+            }
+          });
+        }
+      };
+      connect();
+      return () => {
+        stopped = true;
+        clearTimeout(timer);
+        source?.close();
+      };
     },
     async demoReset() {
       await request("/demo/reset", { method: "POST" });
@@ -80,11 +113,20 @@ export function createLiveClient(base: string): AylandApi {
     },
     async health() {
       try {
-        const checks = await json<Record<string, { ok?: boolean; error?: string }>>("/health");
-        const failing = ["mongodb", "claude_cli", "oyu"].filter((key) => !checks[key]?.ok);
-        return failing.length
-          ? { ok: false, detail: failing.map((key) => `${key}: ${checks[key]?.error ?? "off"}`).join(" · ") }
-          : { ok: true, detail: "MongoDB · Claude · Novelsoft" };
+        const checks = await json<Record<string, { ok?: boolean; error?: string } | boolean>>("/health");
+        const ok = (key: string) => {
+          const check = checks[key];
+          return typeof check === "object" && check.ok === true;
+        };
+        const problem = (key: string) => {
+          const check = checks[key];
+          return `${key}: ${(typeof check === "object" && check.error) || "off"}`;
+        };
+        const failing = REQUIRED.filter((key) => !ok(key));
+        if (failing.length) return { ok: false, detail: failing.map(problem).join(" · ") };
+        const warnings = OPTIONAL.filter((key) => !ok(key)).map(problem);
+        if (checks.demo_mode === false) warnings.push(mn.live.demoModeOff);
+        return { ok: true, detail: ["MongoDB · Claude · Novelsoft", ...warnings].join(" · ") };
       } catch {
         return { ok: false, detail: mn.live.unreachable };
       }

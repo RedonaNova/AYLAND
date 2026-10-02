@@ -44,10 +44,12 @@ export default function InterpreterPage() {
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const recording = useRef<Recording | null>(null);
   const starting = useRef(false);
+  const unmounted = useRef(false); // a mic prompt answered after unmount must not leave the mic on
   const recognition = useRef<Listening | null>(null);
 
   useEffect(
     () => () => {
+      unmounted.current = true;
       timers.current.forEach(clearTimeout);
       recording.current?.cancel();
       recognition.current?.stop();
@@ -103,7 +105,9 @@ export default function InterpreterPage() {
     if (starting.current) return; // a second tap while the mic prompt is open
     starting.current = true;
     try {
-      recording.current = await startRecording();
+      const clip = await startRecording();
+      if (unmounted.current) return clip.cancel();
+      recording.current = clip;
       setPartial("");
       setListening("me");
     } catch {
@@ -245,7 +249,7 @@ export default function InterpreterPage() {
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             placeholder={mn.interpreter.typePlaceholder}
-            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-fg-subtle"
+            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-fg-subtle sm:text-sm"
           />
           <button type="submit" disabled={!typed.trim() || translating} className="grid size-9 place-items-center rounded-xl bg-white/[0.08] text-fg disabled:opacity-40">
             <Send className="size-4" />

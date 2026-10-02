@@ -3,15 +3,22 @@
 import type { Lang } from "../types";
 
 const LOCALE: Record<Lang, string> = { mn: "mn-MN", en: "en-US" };
+const hasSynthesis = () => typeof window !== "undefined" && "speechSynthesis" in window;
 
-/** Speaks with a matching browser voice, if the system has one. */
+// Chrome loads its voice list asynchronously; asking once at import starts that early.
+if (hasSynthesis()) window.speechSynthesis.getVoices();
+
+/**
+ * Speaks with a matching browser voice. English falls back to the default voice (usually English) while
+ * the list is still loading; Mongolian stays silent without a Mongolian voice rather than sound garbled.
+ */
 export function speakInBrowser(text: string, lang: Lang): void {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  if (!hasSynthesis()) return;
   const voice = window.speechSynthesis.getVoices().find((v) => v.lang.toLowerCase().startsWith(lang));
-  if (!voice) return;
+  if (!voice && lang !== "en") return;
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.voice = voice;
-  utterance.lang = voice.lang;
+  utterance.lang = voice?.lang ?? LOCALE[lang];
+  if (voice) utterance.voice = voice;
   utterance.rate = 0.95;
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);

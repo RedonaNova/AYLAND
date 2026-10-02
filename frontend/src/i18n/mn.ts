@@ -13,7 +13,7 @@ export const mn = {
   },
   trip: {
     city: "Ханой",
-    dayOf: (day: number, total: number) => `${day}/${total}-р өдөр`,
+    dayOf: (day: number, total: number) => (day > 0 ? `${day}/${total}-р өдөр` : "Аяллын өдөр биш"),
     day: (day: number) => `${day}-р өдөр`,
     travelers: (n: number) => `${n} аялагч`,
   },
@@ -40,6 +40,7 @@ export const mn = {
     ],
   },
   chat: {
+    failed: (reason: string) => `Хариулт тасарлаа: ${reason}`,
     placeholder: "AYLAND-аас асуугаарай…",
     listening: "Сонсож байна…",
     transcribing: "Бичвэр болгож байна…",
@@ -152,7 +153,8 @@ export const mn = {
   },
   live: {
     notYet: "Захиалга live горимд M3–M4-д нэмэгдэнэ. Одоохондоо Mock горимд үзүүлнэ үү.",
-    unreachable: "Backend (порт 8000) ажиллахгүй байна",
+    unreachable: "Backend ажиллахгүй байна (npm run dev эсвэл demo-up.ps1)",
+    demoModeOff: "DEMO_MODE унтраалттай: цаг агаар, reset ажиллахгүй",
     micDenied: "Микрофонд хандах зөвшөөрөл алга.",
     sttFailed: "Яриаг танисангүй, дахин оролдоно уу.",
     noRecognition: "Энэ хөтөч англи яриа танихгүй байна. Бичиж оруулна уу.",

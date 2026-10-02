@@ -19,11 +19,15 @@ export async function* readSse(body: ReadableStream<Uint8Array>): AsyncGenerator
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let pending = ""; // a trailing "\r" waits: the "\n" of its CRLF may arrive in the next chunk
   try {
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true }).replaceAll("\r\n", "\n");
+      pending += decoder.decode(value, { stream: true });
+      const keep = pending.endsWith("\r") ? 1 : 0;
+      buffer += pending.slice(0, pending.length - keep).replace(/\r\n?/g, "\n");
+      pending = pending.slice(pending.length - keep);
       for (let end = buffer.indexOf("\n\n"); end !== -1; end = buffer.indexOf("\n\n")) {
         const event = parse(buffer.slice(0, end));
         buffer = buffer.slice(end + 2);

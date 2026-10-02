@@ -28,6 +28,8 @@ export interface AssistantItem {
   kind: "assistant";
   text: string;
   status: "thinking" | "streaming" | "done" | "error";
+  /** Why the turn failed, shown under whatever text arrived before. */
+  error?: string;
   steps: Step[];
   startedAt: number;
   finishedAt?: number;
@@ -76,6 +78,8 @@ interface Store {
   resolveNudge: (id: string, action: NudgeAction) => void;
   setWeather: (weather: "rain" | "clear") => Promise<void>;
   reset: () => Promise<void>;
+  /** Why the last demo control (weather, reset) failed; cleared by the next one that works. */
+  demoError: string | null;
   interpret: (text: string, source: Lang, target: Lang) => Promise<{ text: string; pronunciation_hint?: string }>;
   nextVoiceLine: () => string;
   /** "mock" runs the scripted orchestrator in the browser; "live" talks to the FastAPI backend. */
@@ -108,9 +112,12 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   const [mapOptions, setMapOptions] = useState<TripOption[] | null>(null);
   const [interpreting, setInterpreting] = useState(false);
   const [draft, setDraft] = useState("");
+  const [demoError, setDemoError] = useState<string | null>(null);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Bumped on reset or mode switch so a run that is still streaming stops touching the fresh chat.
   const epoch = useRef(0);
+  // The request of the run in flight, aborted on reset or mode switch so the backend turn ends too.
+  const inFlight = useRef<AbortController | null>(null);
   const [mode, setStoredMode] = useApiMode();
   const api = useMemo(() => getApi(mode), [mode]);
   const current = loaded[mode];
@@ -142,6 +149,18 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const planUpdated = useCallback(
+    ({ version, changed_item_ids }: { version: number; changed_item_ids: string[] }) => {
+      void loadTrip();
+      setMapOptions(null);
+      setHighlight(changed_item_ids);
+      clearTimeout(highlightTimer.current);
+      highlightTimer.current = setTimeout(() => setHighlight([]), 7000);
+      addLog({ type: "plan", name: "trips.update", node: "mongodb", summary: `Plan v${version}`, ok: true });
+    },
+    [addLog, loadTrip],
+  );
+
   const apply = useCallback(
     (itemId: string, event: AgentEvent) => {
       switch (event.type) {
@@ -149,7 +168,8 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
           patchAssistant(itemId, (it) => ({ ...it, status: "streaming", text: it.text + event.data.text }));
           break;
         case "message.done":
-          patchAssistant(itemId, (it) => ({ ...it, status: "done", finishedAt: Date.now() }));
+          // The backend sends `error` and then `message.done`; the error must stay visible.
+          patchAssistant(itemId, (it) => ({ ...it, status: it.status === "error" ? "error" : "done", finishedAt: Date.now() }));
           break;
         case "tool.start": {
           const meta = toolMeta(event.data.name);
@@ -209,38 +229,44 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
           addLog({ type: "booking", name: "bookings.insert", node: "mongodb", summary: `Confirmed ${event.data.booking.confirmation_code}`, ok: true });
           break;
         case "plan.updated":
-          void loadTrip();
-          setMapOptions(null);
-          setHighlight(event.data.changed_item_ids);
-          clearTimeout(highlightTimer.current);
-          highlightTimer.current = setTimeout(() => setHighlight([]), 7000);
-          addLog({ type: "plan", name: "trips.update", node: "mongodb", summary: `Plan v${event.data.version}`, ok: true });
+          planUpdated(event.data);
           break;
         case "error":
-          patchAssistant(itemId, (it) => ({ ...it, status: "error", text: it.text || event.data.message }));
+          patchAssistant(itemId, (it) => ({ ...it, status: "error", error: event.data.message }));
           break;
         case "nudge":
           break;
       }
     },
-    [addLog, loadTrip, patchAssistant, setProposalState],
+    [addLog, patchAssistant, planUpdated, setProposalState],
   );
 
   const run = useCallback(
-    async (events: AsyncIterable<AgentEvent>) => {
+    async (start: (signal: AbortSignal) => AsyncIterable<AgentEvent>) => {
       const id = uid("a");
       const born = epoch.current;
+      const controller = new AbortController();
+      inFlight.current = controller;
       setItems((prev) => [...prev, { id, kind: "assistant", text: "", status: "thinking", steps: [], startedAt: Date.now() }]);
       try {
-        for await (const event of events) {
+        for await (const event of start(controller.signal)) {
           if (born !== epoch.current) return;
           apply(id, event);
         }
       } catch (err) {
+        if (born !== epoch.current) return;
         apply(id, { type: "error", data: { message: errorMessage(err) } });
+      } finally {
+        if (inFlight.current === controller) inFlight.current = null;
       }
       if (born !== epoch.current) return;
-      patchAssistant(id, (it) => (it.status === "done" || it.status === "error" ? it : { ...it, status: "done", finishedAt: Date.now() }));
+      // A turn that died between tool.start and tool.end must not leave its steps (or the agent map) spinning.
+      patchAssistant(id, (it) => ({
+        ...it,
+        status: it.status === "error" ? "error" : "done",
+        finishedAt: it.finishedAt ?? Date.now(),
+        steps: it.steps.map((s) => (s.status === "running" ? { ...s, status: "error" } : s)),
+      }));
       // A run that ended without booking.confirmed must not leave a card spinning.
       setItems((prev) =>
         prev.map((it) => (it.kind === "assistant" && it.proposalState === "approving" ? { ...it, proposalState: "proposed" } : it)),
@@ -257,7 +283,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
       if (!message) return;
       setDraft("");
       setItems((prev) => [...prev, { id: uid("u"), kind: "user", text: message, via }]);
-      await run(api.chat({ trip_id: TRIP_ID, message }));
+      await run((signal) => api.chat({ trip_id: TRIP_ID, message }, signal));
     },
     [api, run],
   );
@@ -265,7 +291,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   const approve = useCallback(
     async (proposalId: string) => {
       setProposalState(proposalId, "approving");
-      await run(api.approveProposal(proposalId, "tap"));
+      await run((signal) => api.approveProposal(proposalId, "tap", signal));
     },
     [api, run, setProposalState],
   );
@@ -292,15 +318,28 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
     [send],
   );
 
+  /** Runs a demo control; a failure is shown in the demo panel instead of becoming an unhandled rejection. */
+  const control = useCallback(async (action: () => Promise<void>) => {
+    try {
+      await action();
+      setDemoError(null);
+    } catch (err) {
+      setDemoError(errorMessage(err));
+    }
+  }, []);
+
   const setWeather = useCallback(
-    async (weather: "rain" | "clear") => {
-      await api.demoScenario(weather);
-      await loadTrip();
-    },
-    [api, loadTrip],
+    (weather: "rain" | "clear") =>
+      control(async () => {
+        await api.demoScenario(weather);
+        await loadTrip();
+      }),
+    [api, control, loadTrip],
   );
 
   const clearChat = useCallback(() => {
+    inFlight.current?.abort();
+    inFlight.current = null;
     epoch.current += 1;
     setItems([]);
     setLog([]);
@@ -309,11 +348,18 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
     setDraft("");
   }, []);
 
-  const reset = useCallback(async () => {
-    epoch.current += 1; // stop a streaming run now, not after the request
-    await api.demoReset();
-    clearChat();
-  }, [api, clearChat]);
+  const reset = useCallback(
+    () =>
+      control(async () => {
+        epoch.current += 1; // stop a streaming run now, not after the request
+        try {
+          await api.demoReset();
+        } finally {
+          clearChat(); // even when the reset fails, so the abandoned turn doesn't keep the UI busy
+        }
+      }),
+    [api, clearChat, control],
+  );
 
   const setMode = useCallback(
     (next: ApiMode) => {
@@ -364,15 +410,20 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   // loadTrip sets state in a promise callback, never synchronously, as react-hooks/set-state-in-effect requires.
   useEffect(() => {
     void loadTrip();
-    return api.tripEvents(TRIP_ID, (event) => {
-      if (event.type === "nudge") {
-        const { text, detail, actions } = event.data;
-        setItems((prev) => [...prev, { id: uid("n"), kind: "nudge", text, detail, actions, resolved: false }]);
-        addLog({ type: "nudge", name: "nudge.rain", node: "orchestrator", summary: text, ok: true });
-      }
-      void loadTrip();
-    });
-  }, [addLog, api, loadTrip]);
+    return api.tripEvents(
+      TRIP_ID,
+      (event) => {
+        if (event.type === "plan.updated") return planUpdated(event.data);
+        if (event.type === "nudge") {
+          const { text, detail, actions } = event.data;
+          setItems((prev) => [...prev, { id: uid("n"), kind: "nudge", text, detail, actions, resolved: false }]);
+          addLog({ type: "nudge", name: "nudge.rain", node: "orchestrator", summary: text, ok: true });
+        }
+        void loadTrip();
+      },
+      () => void loadTrip(),
+    );
+  }, [addLog, api, loadTrip, planUpdated]);
 
   const value: Store = {
     view,
@@ -392,6 +443,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
     resolveNudge,
     setWeather,
     reset,
+    demoError,
     interpret,
     nextVoiceLine,
     mode,

@@ -26,9 +26,11 @@ export function Composer() {
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const recording = useRef<Recording | null>(null);
   const starting = useRef(false);
+  const unmounted = useRef(false); // a mic prompt answered after unmount must not leave the mic on
 
   useEffect(
     () => () => {
+      unmounted.current = true;
       timers.current.forEach(clearTimeout);
       recording.current?.cancel();
     },
@@ -53,7 +55,9 @@ export function Composer() {
     if (starting.current || recording.current) return; // a second tap while the mic prompt is open
     starting.current = true;
     try {
-      recording.current = await startRecording();
+      const clip = await startRecording();
+      if (unmounted.current) return clip.cancel();
+      recording.current = clip;
       setListening(true);
     } catch {
       setVoiceError(mn.live.micDenied);
@@ -97,8 +101,9 @@ export function Composer() {
     timers.current.push(setTimeout(() => finishVoice(line), LEAD_MS + words.length * WORD_MS + 450));
   };
 
+  // By what is running, not by the mode: a switch to Mock mid-recording must still stop the mic.
   const stopListening = () => {
-    if (mode === "live") void stopLive();
+    if (recording.current) void stopLive();
     else finishVoice(partial);
   };
 
@@ -165,7 +170,7 @@ export function Composer() {
                   }
                 }}
                 placeholder={mn.chat.placeholder}
-                className="block max-h-40 w-full resize-none bg-transparent text-[15px] leading-6 text-fg outline-none [field-sizing:content] placeholder:text-fg-subtle"
+                className="block max-h-40 w-full resize-none bg-transparent text-[16px] leading-6 sm:text-[15px] text-fg outline-none [field-sizing:content] placeholder:text-fg-subtle"
               />
             )}
           </div>

@@ -17,15 +17,18 @@ export interface AylandApi {
   /** GET /api/trips/{trip_id} */
   getTrip(tripId: string): Promise<TripView>;
   /** POST /api/chat → SSE */
-  chat(req: { trip_id: string; message: string }): AsyncIterable<AgentEvent>;
+  chat(req: { trip_id: string; message: string }, signal?: AbortSignal): AsyncIterable<AgentEvent>;
   /** POST /api/proposals/{id}/approve → SSE. The only path that spends money (consent gate). */
-  approveProposal(proposalId: string, method: "tap" | "voice"): AsyncIterable<AgentEvent>;
+  approveProposal(proposalId: string, method: "tap" | "voice", signal?: AbortSignal): AsyncIterable<AgentEvent>;
   /** POST /api/proposals/{id}/reject */
   rejectProposal(proposalId: string): Promise<void>;
   /** POST /api/interpret */
   interpret(req: { text: string; source_lang: Lang; target_lang: Lang }): Promise<{ text: string; pronunciation_hint?: string }>;
-  /** GET /api/trips/{trip_id}/events → SSE of nudges and plan changes. Returns an unsubscribe function. */
-  tripEvents(tripId: string, onEvent: (event: AgentEvent) => void): () => void;
+  /**
+   * GET /api/trips/{trip_id}/events → SSE of nudges and plan changes. Returns an unsubscribe function.
+   * `onReconnect` fires when the stream comes back after a drop, so the caller can re-fetch what it missed.
+   */
+  tripEvents(tripId: string, onEvent: (event: AgentEvent) => void, onReconnect?: () => void): () => void;
   /** POST /api/demo/reset (DEMO_MODE only) */
   demoReset(): Promise<void>;
   /** POST /api/demo/scenario (DEMO_MODE only) */

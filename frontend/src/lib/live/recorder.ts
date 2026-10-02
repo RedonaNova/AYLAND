@@ -8,23 +8,26 @@ export interface Recording {
   stop(): Promise<Blob>;
   /** Stop and throw the audio away. */
   cancel(): void;
-  /** Recent input level 0..1, for a live meter. */
-  level(): number;
 }
 
 export async function startRecording(): Promise<Recording> {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
-  const context = new AudioContext();
-  const source = context.createMediaStreamSource(stream);
-  // ScriptProcessorNode is deprecated but works in every browser without a separate worklet file.
-  const processor = context.createScriptProcessor(4096, 1, 1);
+  let context: AudioContext;
+  let source: MediaStreamAudioSourceNode;
+  let processor: ScriptProcessorNode;
+  try {
+    context = new AudioContext();
+    source = context.createMediaStreamSource(stream);
+    // ScriptProcessorNode is deprecated but works in every browser without a separate worklet file.
+    processor = context.createScriptProcessor(4096, 1, 1);
+  } catch (err) {
+    stream.getTracks().forEach((track) => track.stop()); // never leave the mic on after a failed setup
+    throw err;
+  }
   const chunks: Float32Array[] = [];
-  let peak = 0;
 
   processor.onaudioprocess = (event) => {
-    const samples = event.inputBuffer.getChannelData(0);
-    chunks.push(new Float32Array(samples));
-    peak = samples.reduce((max, s) => Math.max(max, Math.abs(s)), 0);
+    chunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
   };
   source.connect(processor);
   processor.connect(context.destination);
@@ -39,10 +42,11 @@ export async function startRecording(): Promise<Recording> {
   return {
     async stop() {
       release();
-      return encodeWav(downsample(merge(chunks), context.sampleRate, TARGET_RATE), TARGET_RATE);
+      // Below 16 kHz (some Bluetooth headsets) the samples pass through, so the header must say their real rate.
+      const rate = Math.min(context.sampleRate, TARGET_RATE);
+      return encodeWav(downsample(merge(chunks), context.sampleRate, rate), rate);
     },
     cancel: release,
-    level: () => peak,
   };
 }
 
