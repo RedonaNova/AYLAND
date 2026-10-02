@@ -8,7 +8,7 @@ This handbook is our single source of truth for **what** we build, **how** the p
 
 - **First time here?** Read §1 to §4 (about 10 minutes).
 - **While coding,** keep §7 (repo layout), §8 (contracts) and §10 (roadmap) open.
-- **Status:** v1.7 draft (2026-10-03). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
+- **Status:** v1.8 draft (2026-10-03). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
 
 ---
 
@@ -363,11 +363,13 @@ memories   { _id, user_id, trip_id?, kind: "preference" | "fact" | "feedback", t
 
 messages   { _id, trip_id, role, content, run_id, ts }  // the turn's text; Claude's own history lives in its CLI session
 
+trip_versions { _id, trip_id, version, days, reason, ts }   // the days as they were before each plan change (undo)
+
 agent_events { _id, trip_id, run_id, type: "tool" | "a2a" | "plan" | "booking" | "llm",
                name, input, output_summary, ok, ms, ts }
 ```
 
-**Indexes:** `offers.location` (2dsphere), `proposals.trip_id`, `bookings.trip_id`, `messages (trip_id, ts)`, `agent_events (trip_id, ts)`. *Should:* Atlas Vector Search indexes on `offers.embedding` and `memories.embedding`.
+**Indexes:** `offers.location` (2dsphere), `proposals.trip_id`, `bookings.trip_id`, `messages (trip_id, ts)`, `agent_events (trip_id, ts)`, `trip_versions (trip_id, version)`. *Should:* Atlas Vector Search indexes on `offers.embedding` and `memories.embedding`.
 
 ### 8.2 Tools
 
@@ -396,8 +398,9 @@ Tool inputs take points as `{ lon, lat }` (the model can't swap a named pair); o
 | `get_trip` | (bound to the trip) | Today's plan with item ids, times and places (lon/lat), travelers, party size, hotel (lon/lat) |
 | `get_budget_status` | (bound to the trip) | Today's `{ limit, spent, booked, planned, remaining }` |
 | `present_options` | `options[]`: `offer_id`, `slot_start`, `reason`, `travel_mode`, `travel_min`, `travel_cost_usd?` | Emits the `options` event; offer, slot and price come from the catalog, so a card never shows a price the merchant didn't publish |
-| `update_trip_plan` | `trip_id`, `date`, `changes[]` (add / replace / cancel items), `reason` | New `version` plus a diff; emits `plan.updated` |
-| `propose_booking` | `offer_id`, `slot_start`, `party_size` | A proposal with `status: proposed`; emits `proposal.created` |
+| `update_trip_plan` | `changes[]`: `cancel` / `move` (`start`, `end`, optional `date`) / `add` (`item`) / `replace` (`item_id`, `item`); `reason`; optional `date` | New `version`, the changed ids and today's budget; emits `plan.updated` on the trip events. Only `planned` items change (booked ones go through the consent gate); new items are free or pay-on-site, never offers; clashes, past times and going over the daily limit are refused with a reason |
+| `propose_booking` | `offer_id`, `slot_start`, `party_size` (default the party) | A proposal with `status: proposed` (any other open one expires), `fits_budget`, `remaining_after_usd`; emits `proposal.created { proposal, offer }` |
+| `undo_plan_change` | (none) | Brings the previous version back as a new version (so an undo can be undone); refused once a booking changed since |
 | `remember` / `recall` *(Should)* | `text` / `query` | Writes a memory / returns the top-k memories |
 
 ### 8.3 A2A agents
@@ -432,7 +435,7 @@ Tool inputs take points as `{ lon, lat }` (the model can't swap a named pair); o
 | POST | `/api/interpret` | `{ text, source_lang, target_lang }`; returns `{ text }` |
 | GET | `/api/trips/{trip_id}` | Trip with plan, budget and bookings |
 | POST | `/api/proposals/{id}/approve` | Consent: calls the Booking Agent over A2A, updates the plan, emits events |
-| POST | `/api/proposals/{id}/reject` | Rejects the proposal |
+| POST | `/api/proposals/{id}/reject` | Rejects an open proposal (409 if it was already decided or replaced) |
 | GET | `/api/trips/{trip_id}/events` | *(Should)* SSE stream of plan and booking updates and nudges |
 | GET | `/api/trips/{trip_id}/events/poll?cursor=` | The same events as a long poll (≤20 s): `{ events[], cursor, reset }`. The web client uses this, because Cloudflare quick tunnels buffer streamed responses until they end |
 | GET | `/api/health` | MongoDB, Claude CLI, Novelsoft key, both A2A agents (`ping`) and both MCP servers (`tools/list`), DEMO_MODE |
@@ -542,13 +545,15 @@ Tick a box only after the task's tests pass (offline first, then live, which spe
 
 ### M3: Plan and budget (H8 to H12)
 
-- [ ] **M3-A1** `update_trip_plan` tool (versioned and reversible) that emits `plan.updated`.
-- [ ] **M3-A2** `propose_booking` tool that writes to `proposals` and emits `proposal.created`.
-- [ ] **M3-B1** Budget service: planned, booked and remaining for today.
+> **M3 build (2026-10-03).** Plan changes, proposals and the budget run on MongoDB in live mode: `ayland/orchestrator/plan.py` (versioned change sets with undo), `proposals.py`, `ayland/budget.py`; prompt v2 tells the agent to re-plan free items itself and to book only through a proposal. Offline: 79 backend tests; Playwright drives a live re-plan and a proposal against a scripted backend. Not run live yet (that needs a Claude turn).
+
+- [ ] **M3-A1** `update_trip_plan` tool (versioned and reversible) that emits `plan.updated`. *(built 2026-10-03, with `undo_plan_change`; tick after a live re-plan)*
+- [ ] **M3-A2** `propose_booking` tool that writes to `proposals` and emits `proposal.created`. *(built 2026-10-03, with `POST /api/proposals/{id}/reject`; tick after a live proposal)*
+- [ ] **M3-B1** Budget service: planned, booked and remaining for today. *(built 2026-10-03: `ayland/budget.py`, the same formula as the web meter; offline tests pass; tick after a live re-plan)*
 - [ ] **M3-B2** *(Should)* Embed offers, create the Atlas Vector Search index, and use semantic search inside `search_offers`.
 - [ ] **M3-B3** *(Should)* `remember` and `recall` tools on `memories`.
-- [ ] **M3-C1** Today's timeline with live updates on `plan.updated`, plus the budget meter.
-- [ ] **M3-C2** *(Should)* Map with the hotel and plan items as pins and a route line to the next item.
+- [ ] **M3-C1** Today's timeline with live updates on `plan.updated`, plus the budget meter. *(UI built in v0; live `plan.updated` refreshes it, Playwright-tested against a scripted backend; tick after a live re-plan)*
+- [ ] **M3-C2** *(Should)* Map with the hotel and plan items as pins and a route line to the next item. *(UI built in v0; it follows the live plan and option cards)*
 
 ### M4: ★ Magic moment, text version (H12 to H15)
 
@@ -748,3 +753,4 @@ Live mode works through Vercel and the tunnel even though both may buffer stream
 | 2026-10-02 | v1.5.1 | M1 review: full seed (M1-B2), DEMO_MODE guard, `transcribe/speak(…, lang)` (M1-D2), live SSE fixes (proxy gzip, heartbeat, reconnect), stale-seed refresh |
 | 2026-10-03 | v1.6 | M2 built: MCP `travel-data` and `merchant` (§8.2 inputs now `origin`/`destination` and `{ lon, lat }` points), `present_options` and the `options` event, prompt v1, Interpreter Agent on a shared A2A base, trip-event long poll, CLI isolation from the developer's claude.ai connectors |
 | 2026-10-03 | v1.7 | M2 review: chat turns as background runs read by long poll (works through tunnels and Vercel), early tool.start, MCP reconnect, slot matching as times; Vercel deployment steps (§12); M1 and M2 exit checks passed live; prompt v1.1 |
+| 2026-10-03 | v1.8 | M3 built: `update_trip_plan` (cancel / move / add / replace, versioned in `trip_versions`) and `undo_plan_change`, `propose_booking` with `proposal.created { proposal, offer }`, reject endpoint, budget service; prompt v2 |
