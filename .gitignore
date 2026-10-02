@@ -39,8 +39,8 @@ desktop.ini
 *.log
 coverage/
 
-# Personal AI assistant instructions (not shared)
-CLAUDE.md
+# Personal Claude Code settings (the shared ones are .claude/settings.json and CLAUDE.md)
+.claude/settings.local.json
 
 # Local UI reference screenshots (not shared)
 screenshots/
