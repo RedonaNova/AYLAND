@@ -168,7 +168,7 @@ function DayRow({ index, view, day, today }: { index: number; view: TripView; da
                 now={view.now}
                 showNow={isToday}
                 partySize={view.trip.party_size}
-                raining={isToday && view.weather.condition === "rain"}
+                raining={isToday && view.weather?.condition === "rain"}
                 highlight={NO_HIGHLIGHT}
               />
             </div>

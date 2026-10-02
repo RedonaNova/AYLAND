@@ -120,7 +120,8 @@ export interface Weather {
 export interface TripView {
   trip: Trip;
   bookings: Booking[];
-  weather: Weather;
+  /** Null when the weather service is down; the trip still loads. */
+  weather: Weather | null;
   /** Local "now" for the trip, ISO 8601 with offset (DEMO_NOW in demo mode). */
   now: string;
 }

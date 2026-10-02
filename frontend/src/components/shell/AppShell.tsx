@@ -28,7 +28,7 @@ function isActive(pathname: string, href: string) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { view } = useStore();
-  const raining = view?.weather.condition === "rain";
+  const raining = view?.weather?.condition === "rain";
   useDemoShortcuts();
 
   return (
@@ -112,10 +112,12 @@ function Sidebar({ pathname }: { pathname: string }) {
           </div>
           <div className="mt-3 flex items-center justify-between">
             <TravelerAvatars travelers={view.trip.travelers} />
-            <span className="flex items-center gap-1 text-xs text-fg-muted">
-              <WeatherIcon condition={view.weather.condition} className="size-4" />
-              {view.weather.temp_c}°C
-            </span>
+            {view.weather && (
+              <span className="flex items-center gap-1 text-xs text-fg-muted">
+                <WeatherIcon condition={view.weather.condition} className="size-4" />
+                {view.weather.temp_c}°C
+              </span>
+            )}
           </div>
         </div>
       )}

@@ -19,7 +19,7 @@ export const NODES: Record<NodeId, AgentNode> = {
     protocol: "LLM",
     port: 8000,
     role: "Зорилгыг ойлгож, хэрэгсэл дуудаж, зөвшөөрлийн хаалгыг хамгаална",
-    abilities: ["get_trip", "get_budget_status", "update_trip_plan", "propose_booking"],
+    abilities: ["get_trip", "get_budget_status", "present_options", "update_trip_plan", "propose_booking"],
   },
   "travel-data": {
     id: "travel-data",
@@ -72,6 +72,7 @@ const TOOLS: Record<string, ToolMeta> = {
   get_budget_status: { label: "Төсөв шалгах", node: "mongodb" },
   update_trip_plan: { label: "Хөтөлбөр шинэчлэх", node: "mongodb" },
   propose_booking: { label: "Захиалгын санал", node: "mongodb" },
+  present_options: { label: "Хувилбар харуулах", node: "orchestrator" },
   get_weather: { label: "Цаг агаар", node: "travel-data" },
   search_places: { label: "Газар хайх", node: "travel-data" },
   get_route: { label: "Зам тооцоолох", node: "travel-data" },

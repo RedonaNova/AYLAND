@@ -88,9 +88,13 @@ function ChatHeader({ onOpenToday }: { onOpenToday: () => void }) {
           onClick={onOpenToday}
           className="surface ml-auto flex items-center gap-2 rounded-full py-1.5 pl-2.5 pr-3 text-xs xl:hidden"
         >
-          <WeatherIcon condition={view.weather.condition} className="size-4" />
-          <span className="tabular-nums">{view.weather.temp_c}°</span>
-          <span className="h-3 w-px bg-white/10" />
+          {view.weather && (
+            <>
+              <WeatherIcon condition={view.weather.condition} className="size-4" />
+              <span className="tabular-nums">{view.weather.temp_c}°</span>
+              <span className="h-3 w-px bg-white/10" />
+            </>
+          )}
           <span className="tabular-nums text-fg">{usd(remaining)}</span>
           <ChevronUp className="size-3.5 text-fg-subtle" />
         </button>

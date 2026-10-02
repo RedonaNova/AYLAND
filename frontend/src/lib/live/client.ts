@@ -9,7 +9,7 @@ import { readSse } from "./sse";
 const TRIP_EVENTS = ["nudge", "plan.updated", "booking.confirmed"] as const;
 /** Without these the chat can't work; the rest are reported as warnings. */
 const REQUIRED = ["mongodb", "claude_cli", "oyu"] as const;
-const OPTIONAL = ["a2a_booking"] as const;
+const OPTIONAL = ["mcp_travel_data", "mcp_merchant", "a2a_booking", "a2a_interpreter"] as const;
 const RETRY_MS = { first: 1000, max: 15_000 };
 
 interface TripEventPage {
@@ -125,7 +125,8 @@ export function createLiveClient(base: string): AylandApi {
         if (failing.length) return { ok: false, detail: failing.map(problem).join(" · ") };
         const warnings = OPTIONAL.filter((key) => !ok(key)).map(problem);
         if (checks.demo_mode === false) warnings.push(mn.live.demoModeOff);
-        return { ok: true, detail: ["MongoDB · Claude · Novelsoft", ...warnings].join(" · ") };
+        const services = warnings.length ? "MongoDB · Claude · Novelsoft" : "MongoDB · Claude · Novelsoft · MCP · A2A";
+        return { ok: true, detail: [services, ...warnings].join(" · ") };
       } catch {
         return { ok: false, detail: mn.live.unreachable };
       }

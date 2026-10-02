@@ -63,7 +63,7 @@ function ModeSwitch() {
 /** DEMO_MODE controls (HANDBOOK §3, §8.4 /api/demo/*). Alt+R rain, Alt+C clear, Alt+N reset. */
 export function DemoControls({ className }: { className?: string }) {
   const { view, setWeather, reset, mode } = useStore();
-  const raining = view?.weather.condition === "rain";
+  const raining = view?.weather?.condition === "rain";
   const live = mode === "live";
 
   return (

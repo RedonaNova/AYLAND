@@ -29,7 +29,7 @@ export function TodayPanel() {
       </header>
 
       <div className="grid grid-cols-2 gap-3">
-        <WeatherCard weather={view.weather} now={view.now} />
+        {view.weather ? <WeatherCard weather={view.weather} now={view.now} /> : <div />}
         <BudgetMeter budget={dayBudget(view.trip, today)} />
       </div>
 
@@ -43,7 +43,7 @@ export function TodayPanel() {
           items={items}
           now={view.now}
           partySize={view.trip.party_size}
-          raining={view.weather.condition === "rain"}
+          raining={view.weather?.condition === "rain"}
           highlight={highlight}
         />
       </section>
