@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from pymongo.asynchronous.database import AsyncDatabase
 
-from ayland import clock
+from ayland import budget, clock
 from ayland.db import models
 
 TRIP_ID = "trip_hanoi_demo"
@@ -39,36 +39,10 @@ async def trip_view(db: AsyncDatabase, trip_id: str) -> dict[str, Any]:
     return {"trip": trip, "bookings": bookings, "now": clock.now_iso()}
 
 
-def group_amount(money: dict[str, Any], party_size: int) -> float:
-    return money["amount"] * party_size if money["per"] == "person" else money["amount"]
-
-
-def day_items(trip: dict[str, Any], date: str) -> list[dict[str, Any]]:
-    return next((day["items"] for day in trip["days"] if day["date"] == date), [])
-
-
-def day_budget(trip: dict[str, Any], date: str) -> dict[str, float]:
-    """Done items are spent, booked are committed, planned are expected; remaining is free to spend."""
-    items = day_items(trip, date)
-
-    def total(status: str) -> float:
-        return sum(group_amount(i["cost"], trip["party_size"]) for i in items if i["status"] == status)
-
-    spent, booked, planned = total("done"), total("booked"), total("planned")
-    limit = trip["budget"]["daily_limit"]
-    return {
-        "limit": limit,
-        "spent": spent,
-        "booked": booked,
-        "planned": planned,
-        "remaining": limit - spent - booked - planned,
-    }
-
-
 def upcoming_outdoor(trip: dict[str, Any], now_iso: str) -> list[dict[str, Any]]:
     """Planned outdoor items from now on: what rain puts at risk."""
     now = clock.minutes(now_iso)
-    items = day_items(trip, now_iso[:10])
+    items = budget.day_items(trip, now_iso[:10])
     return [i for i in items if i["status"] == "planned" and not i["indoor"] and clock.minutes(i["start"]) >= now]
 
 

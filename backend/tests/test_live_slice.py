@@ -2,6 +2,7 @@ import io
 import json
 import wave
 
+from ayland import budget
 from ayland.db import repo
 from ayland.demo.seed import load_seed, materialize
 from ayland.orchestrator import prompts
@@ -19,15 +20,14 @@ def _trip() -> dict:
 def test_seed_puts_day_three_on_today_with_offset_times() -> None:
     data = materialize(load_seed(), TODAY)
     assert [day["date"] for day in data.trip["days"]][2] == TODAY
-    lunch = next(i for i in repo.day_items(data.trip, TODAY) if i["item_id"] == "d3-3")
+    lunch = next(i for i in budget.day_items(data.trip, TODAY) if i["item_id"] == "d3-3")
     assert lunch["start"] == "2026-10-05T12:00:00+07:00"
     assert data.offers[0]["slots"][0]["start"].startswith(TODAY)
     assert all(b["trip_id"] == data.trip["_id"] for b in data.bookings)
 
 
 def test_day_budget_matches_the_demo_story() -> None:
-    budget = repo.day_budget(_trip(), TODAY)
-    assert budget == {"limit": 200, "spent": 20, "booked": 0, "planned": 80, "remaining": 100}
+    assert budget.day(_trip(), TODAY) == {"limit": 200, "spent": 20, "booked": 0, "planned": 80, "remaining": 100}
 
 
 def test_rain_puts_the_two_afternoon_outdoor_items_at_risk() -> None:
