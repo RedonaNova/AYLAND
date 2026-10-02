@@ -8,7 +8,7 @@ This handbook is our single source of truth for **what** we build, **how** the p
 
 - **First time here?** Read §1 to §4 (about 10 minutes).
 - **While coding,** keep §7 (repo layout), §8 (contracts) and §10 (roadmap) open.
-- **Status:** v1.3 draft (2026-10-01). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
+- **Status:** v1.4 draft (2026-10-02). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
 
 ---
 
@@ -266,7 +266,8 @@ AYLAND/
 ├── HANDBOOK.md               ← you are here
 ├── README.md                 ← short intro + quick start
 ├── .env.example              ← every env var with no secrets (M0-6)
-├── package.json              ← root scripts: setup, dev, seed (M0-6)
+├── package.json              ← root scripts: setup, dev, seed, check (M0-6)
+├── demo-up.ps1               ← runs the live demo on this PC (API :8100, web :3100, tunnel)
 ├── docs/
 │   ├── concept/Morgensonne.docx   ← original concept (Mongolian)
 │   ├── spikes/               ← M0-4 / M0-5 results (audio stays local)
@@ -280,9 +281,10 @@ AYLAND/
 │       │                       Timeline, BudgetMeter, AgentSteps (trace), MapView
 │       ├── i18n/mn.ts        ← all Mongolian UI strings in one place
 │       └── lib/
-│           ├── api.ts        ← typed client for the orchestrator API (§8.4)
+│           ├── api.ts        ← AylandApi (§8.4): mock or live, switched in the demo controls
 │           ├── types.ts      ← §8 shapes, snake_case
-│           └── mock/         ← in-browser mock orchestrator + Hanoi seed (until M1-A1)
+│           ├── live/         ← HTTP/SSE client, WAV recorder, browser speech (English side)
+│           └── mock/         ← in-browser scripted orchestrator (the stage-safe fallback)
 ├── backend/                  ← one Python project (uv), several processes
 │   ├── pyproject.toml
 │   ├── ayland/
@@ -487,6 +489,8 @@ Times are **hours from kickoff (H0)** and assume a build window of about 24 hour
 
 Tick a box in the same PR that finishes the task. Task IDs (M2-B1 and so on) go in branch names and PR titles.
 
+> **Live slice (2026-10-02).** Live mode (demo controls → Live) runs on the real backend: Claude through the CLI login with `get_trip` and `get_budget_status` reading MongoDB, chat stored in `messages`, tool calls in `agent_events`, the rain nudge on the trip event stream, Anir for the mic, tsuurAI for Mongolian speech and Orchu for the interpreter. Options, proposals and booking still need M2–M4; until then the full magic moment runs in Mock mode. Measured: first rain question about 14 s (mostly thinking), follow-ups about 4 s.
+>
 > **Web demo v0 (2026-09-30).** The UI side of M1-C1, M2-C1, M2-C2, M3-C1, M3-C2, M4-C1, M5-C1 (simulated voice) and M5-C2 is built against an in-browser mock orchestrator that emits the §8.4 events. Those boxes stay unticked until each is wired to the real orchestrator and passes its milestone's exit check. `frontend/e2e/` already runs the Act 1 to 4 flow and is the starting point for M4-ALL.
 
 ### M0: Setup (H0 to H2)
@@ -502,13 +506,13 @@ Tick a box in the same PR that finishes the task. Task IDs (M2-B1 and so on) go 
 
 ### M1: Walking skeleton (H2 to H5)
 
-- [ ] **M1-A1** FastAPI app with `POST /api/chat` streaming a Claude reply (`message.delta`, `message.done`). System prompt v0 covers the persona, Mongolian and the rules in §5.4.
-- [ ] **M1-A2** Store chat turns in `messages`.
+- [x] **M1-A1** FastAPI app with `POST /api/chat` streaming a Claude reply (`message.delta`, `message.done`). System prompt v0 covers the persona, Mongolian and the rules in §5.4.
+- [x] **M1-A2** Store chat turns in `messages`.
 - [ ] **M1-B1** `ayland/db`: client, Pydantic models for §8.1, small repository functions.
-- [ ] **M1-B2** Seed data: the demo user; the Hanoi trip (today = the seed date, an outdoor-heavy plan, hotel in the Old Quarter); 25 to 30 realistic offers with a good share of indoor, rainy-day and budget options; and the merchants. `scripts/seed.py` must be idempotent so it doubles as the demo reset.
-- [ ] **M1-C1** Mobile-first chat screen that reads the SSE stream, plus a trip panel from `GET /api/trips/{id}`.
+- [x] **M1-B2** Seed data (`data/seed/hanoi.json`, `npm run seed`): the demo user; the Hanoi trip (today = the seed date, an outdoor-heavy plan, hotel in the Old Quarter); 25 to 30 realistic offers with a good share of indoor, rainy-day and budget options; and the merchants. `scripts/seed.py` must be idempotent so it doubles as the demo reset.
+- [x] **M1-C1** Mobile-first chat screen that reads the SSE stream, plus a trip panel from `GET /api/trips/{id}`.
 - [ ] **M1-D1** Booking Agent skeleton that serves its Agent Card and a `ping` skill, plus an A2A client helper in the orchestrator that calls it.
-- [ ] **M1-D2** Voice adapter interface (`transcribe(audio, lang)`, `speak(text, lang)`) using the provider chosen in D4, exposed as `/api/voice/*`.
+- [x] **M1-D2** Voice adapter interface (`transcribe(audio, lang)`, `speak(text, lang)`) using the provider chosen in D4, exposed as `/api/voice/*`.
 
 ### M2: Tools via MCP (H5 to H9)
 
@@ -516,7 +520,7 @@ Tick a box in the same PR that finishes the task. Task IDs (M2-B1 and so on) go 
 - [ ] **M2-B2** MCP `merchant`: `search_offers` (filters plus a 2dsphere "near" query), `get_offer`, `check_availability`.
 - [ ] **M2-B3** Exercise both servers in the MCP Inspector and add smoke tests in `backend/tests`.
 - [ ] **M2-A1** The orchestrator loads the MCP tools (Tool Runner plus MCP helpers) and the local tools `get_trip` and `get_budget_status`.
-- [ ] **M2-A2** Emit `tool.start` and `tool.end` and write `agent_events`.
+- [x] **M2-A2** Emit `tool.start` and `tool.end` and write `agent_events`.
 - [ ] **M2-A3** Prompt v1: compare options, show per-person and total cost, respect the budget, end with a next step.
 - [ ] **M2-C1** Trace panel: a live list of agent steps with status and timings.
 - [ ] **M2-C2** Option cards: title, time, travel time, cost, and a one-line reason.
@@ -630,11 +634,14 @@ git switch dev
 cp .env.example .env     # fill in MONGODB_URI and OYU_API_KEY (never paste keys in chat groups)
 npm run setup            # root tools, frontend (npm) and backend (uv sync)
 npm run check            # MongoDB, Claude (CLI), OyuLLM, tsuurAI → Anir round trip
-npm run dev              # web on :3000 (still the in-browser mock) + orchestrator API on :8000
+npm run seed             # load the Hanoi demo into MongoDB (also the demo reset)
+npm run dev              # web on :3000 + orchestrator API on :8000; choose Mock or Live in the demo controls
 npm test                 # backend unit tests;  npm run test:e2e for the browser golden path
 ```
 
-`npm run seed` and the MCP servers and A2A agents join `npm run dev` in M1 and M2; update this section in those PRs.
+The MCP servers and A2A agents join `npm run dev` in M2; update this section in that PR.
+
+**Live demo on this PC:** from a checkout of `demo` with its own `.env`, `powershell -ExecutionPolicy Bypass -File demo-up.ps1 -Build` starts the API on :8100, the web app on :3100 and a Cloudflare quick tunnel, and prints the public URL. `-KeepTunnel` restarts the app without changing the URL; `-Stop` stops everything. Frontend build settings: `AYLAND_API_ORIGIN` (where `/api` goes, default `http://localhost:8000`) and `NEXT_PUBLIC_AYLAND_MODE` (`live` to start in live mode).
 
 **Environment variables:** see [`.env.example`](.env.example). Secrets: `MONGODB_URI` and `OYU_API_KEY`. Claude needs no key (`CLAUDE_CLI_PATH` only if auto-detection fails). Only `backend/ayland/config.py` reads them.
 
@@ -710,3 +717,4 @@ npm test                 # backend unit tests;  npm run test:e2e for the browser
 | 2026-09-30 | v1.1 | Branch model `main` / `demo` / `dev` (§11); web demo v0 with mock orchestrator and e2e checks (§7, §10, §12); §8.4 v1.1 contract additions |
 | 2026-10-01 | v1.2 | Novelsoft OyuLLM / Anir / tsuurAI (D1, D4); Claude through the Claude Code CLI, no API key (M0-3); hackathon facts (§6.1); backend scaffold, `.env.example` and spikes (M0-6, §12) |
 | 2026-10-01 | v1.3 | Interpreter is Mongolian ⇄ English for now (any destination language later); Orchu for translation |
+| 2026-10-02 | v1.4 | M1 live slice: chat on Claude + MongoDB tools, seed, voice and interpreter endpoints, Mock/Live switch, `/api` proxy, `demo-up.ps1`; M1-A1, A2, B2, C1, D2 and M2-A2 ticked |

@@ -13,7 +13,9 @@ Built by **Team Morgensonne** for the [Agentic Commerce hackathon](https://nerus
 
 ## Status
 
-Milestone **M0** (setup). A clickable **web demo v0** runs the whole magic moment (rain → options → consent → booking → re-plan → interpreter) against an in-browser mock orchestrator. The Python backend is scaffolded (orchestrator health API, MongoDB, Claude through the Claude Code CLI, OyuLLM, Anir and tsuurAI clients); real agent flows follow in M1.
+Milestone **M1** (walking skeleton). The web app has two modes, switched in the demo controls:
+- **Mock**: the whole magic moment (rain → options → consent → booking → re-plan → interpreter), scripted in the browser. Stage-safe.
+- **Live**: the real backend. Claude (through the Claude Code CLI) answers with tools that read MongoDB; the mic goes to Anir, Mongolian speech comes from tsuurAI, the interpreter translates with Orchu. Options and booking arrive in M2–M4.
 
 Needs Git, Node.js 20+, [uv](https://docs.astral.sh/uv/) and [Claude Code](https://claude.com/claude-code) (logged in).
 
@@ -21,6 +23,7 @@ Needs Git, Node.js 20+, [uv](https://docs.astral.sh/uv/) and [Claude Code](https
 cp .env.example .env   # fill in MONGODB_URI and OYU_API_KEY
 npm run setup          # frontend + backend dependencies
 npm run check          # MongoDB, Claude, OyuLLM, tsuurAI → Anir
+npm run seed           # load the Hanoi demo into MongoDB
 npm run dev            # web http://localhost:3000 + API http://localhost:8000
 ```
 
