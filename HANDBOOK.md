@@ -8,7 +8,7 @@ This handbook is our single source of truth for **what** we build, **how** the p
 
 - **First time here?** Read §1 to §4 (about 10 minutes).
 - **While coding,** keep §7 (repo layout), §8 (contracts) and §10 (roadmap) open.
-- **Status:** v1.5 draft (2026-10-02). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
+- **Status:** v1.6 draft (2026-10-03). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
 
 ---
 
@@ -235,7 +235,7 @@ Change the status column when the team agrees.
 
 > **Notes for the agent-core owner (D1)**
 > - Claude runs through the **Claude Agent SDK** (`claude-agent-sdk`), which drives the local `claude` CLI and uses its login. `backend/ayland/llm/claude.py` finds the CLI (`CLAUDE_CLI_PATH`, then PATH, then the VS Code extension's copy). Everyone running the orchestrator needs Claude Code installed and logged in.
-> - Turn off what we don't want from Claude Code: `tools=[]` (no built-in file or shell tools), `setting_sources=[]` (no user settings or CLAUDE.md), a neutral `cwd`.
+> - Turn off what we don't want from Claude Code: `tools=[]` (no built-in file or shell tools), `setting_sources=[]` (no user settings or CLAUDE.md), a neutral `cwd`, and in `env` `ENABLE_CLAUDEAI_MCP_SERVERS=false` plus `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`: with a claude.ai login the CLI otherwise loads the account's own connectors (Gmail, Drive…) into the agent (`ISOLATED_ENV` in `llm/claude.py`). `ENABLE_TOOL_SEARCH=false` keeps our few tools loaded up front instead of searched for.
 > - Our MCP servers plug straight in through `mcp_servers` (`{"type": "http", "url": ...}`); local tools (`get_trip`, `propose_booking`, ...) through `create_sdk_mcp_server`. The consent gate also sits in `can_use_tool`, on top of the approve endpoint.
 > - Keep one `ClaudeSDKClient` session per trip conversation: each `query()` starts a CLI process (about 4–6 s for a one-line reply on 2026-09-30). Stream with `include_partial_messages=True`; tune latency with `effort` (`low` for quick turns).
 > - On `claude-opus-5-5`, thinking can't be switched off and forced tool choice is rejected; steer with instructions. Never edit earlier turns of a conversation (the history must stay append-only).
@@ -291,12 +291,12 @@ AYLAND/
 │   │   ├── config.py         ← reads .env, the only place that does
 │   │   ├── db/               ← Mongo client, Pydantic models (§8.1), repositories
 │   │   ├── orchestrator/     ← FastAPI app, agent loop, prompts/, SSE events
-│   │   ├── mcp_servers/
-│   │   │   ├── travel_data/  ← get_weather, search_places, get_route
-│   │   │   └── merchant/     ← search_offers, get_offer, check_availability
-│   │   ├── a2a_agents/
+│   │   ├── mcp_servers/      ← common.py: Point {lon, lat}, caching, ToolError
+│   │   │   ├── travel_data/  ← get_weather (weather.py), search_places (places.py), get_route (routes.py)
+│   │   │   └── merchant/     ← search_offers, get_offer, check_availability (ranking in catalog.py)
+│   │   ├── a2a_agents/       ← base.py: Agent Card, skill table, JSON-RPC app, `ping`
 │   │   │   ├── booking/      ← hold / confirm / cancel
-│   │   │   └── interpreter/  ← translate
+│   │   │   └── interpreter/  ← translate (Orchu)
 │   │   └── voice/            ← STT and TTS provider adapters
 │   ├── scripts/seed.py       ← loads data/seed into MongoDB; also the demo reset
 │   ├── spikes/               ← M0 measurements: check_services, llm_spike, voice_spike
@@ -371,28 +371,31 @@ agent_events { _id, trip_id, run_id, type: "tool" | "a2a" | "plan" | "booking" |
 
 ### 8.2 Tools
 
-**MCP server `travel-data`**
+Tool inputs take points as `{ lon, lat }` (the model can't swap a named pair); outputs stay GeoJSON. Every result carries a short Mongolian `summary` for the trace panel. Anticipated failures (unknown city or offer, OpenStreetMap down) come back as readable tool errors.
+
+**MCP server `travel-data`** (port 8201, `/mcp`, Streamable HTTP, stateless)
 
 | Tool | Input | Output |
 |---|---|---|
-| `get_weather` | `city` or `lat`/`lon`, `hours_ahead` | Current conditions plus hourly `condition`, `precip_prob`, `temp_c`; `scenario: true` when a DEMO_MODE override is active |
-| `search_places` | `query`, `near`, `radius_m`, `kind` | `[ { name, address, location, rating?, source } ]` |
-| `get_route` | `from`, `to`, `mode` (`walk` / `drive`) | `{ distance_m, duration_min, polyline? }` |
+| `get_weather` | `city` or `lat`/`lon`, `hours_ahead` | `condition`, `precip_prob`, `temp_c` now, `until` (when rain stops), `hourly[]`; `scenario: true` when the DEMO_MODE override is active (`data/scenarios/<DEMO_SCENARIO>.json`), else Open-Meteo |
+| `search_places` | `near`, `query`, `kind` (cafe, pharmacy, atm, museum…), `radius_m`, `limit` | `places: [ { name, name_en?, address, location, kind, distance_m, source: "osm" } ]` (Overpass) |
+| `get_route` | `origin`, `destination`, `mode` (`walk` / `drive`) | `{ distance_m, duration_min, cost?, source }`: OSRM on OpenStreetMap roads, drive ×1.4 for city traffic plus a group car fare; an offline estimate if OSRM is down |
 
-**MCP server `merchant`**
+**MCP server `merchant`** (port 8202, `/mcp`)
 
 | Tool | Input | Output |
 |---|---|---|
-| `search_offers` | `city`, `query` (free text), `tags[]`, `max_price_per_person`, `party_size`, `near`, `radius_m`, `time_window` | Ranked offers, each with `price_total` for the party |
+| `search_offers` | `query` (Mongolian or English), `city`, `tags[]` (all required), `max_price_per_person`, `party_size`, `near`, `radius_m`, `time_window` (`"13:00-19:00"`), `date` | `offers[]` best first, each with `price_per_person`, `price_total` for the party, `distance_m` (2dsphere `$geoNear`) and only the slots that fit the window, the party and the clock |
 | `get_offer` | `offer_id` | Full offer |
-| `check_availability` | `offer_id`, `date`, `party_size` | Available slots |
+| `check_availability` | `offer_id`, `date`, `party_size` | Open slots with `start`, `end`, `capacity_left` |
 
 **Orchestrator local tools.** These are not MCP, because they touch our own state and the consent gate.
 
 | Tool | Input | Output |
 |---|---|---|
-| `get_trip` | `trip_id` | Trip including today's plan |
-| `get_budget_status` | `trip_id` | `{ total, spent, remaining_today }` |
+| `get_trip` | (bound to the trip) | Today's plan with item ids, times and places (lon/lat), travelers, party size, hotel (lon/lat) |
+| `get_budget_status` | (bound to the trip) | Today's `{ limit, spent, booked, planned, remaining }` |
+| `present_options` | `options[]`: `offer_id`, `slot_start`, `reason`, `travel_mode`, `travel_min`, `travel_cost_usd?` | Emits the `options` event; offer, slot and price come from the catalog, so a card never shows a price the merchant didn't publish |
 | `update_trip_plan` | `trip_id`, `date`, `changes[]` (add / replace / cancel items), `reason` | New `version` plus a diff; emits `plan.updated` |
 | `propose_booking` | `offer_id`, `slot_start`, `party_size` | A proposal with `status: proposed`; emits `proposal.created` |
 | `remember` / `recall` *(Should)* | `text` / `query` | Writes a memory / returns the top-k memories |
@@ -409,7 +412,7 @@ agent_events { _id, trip_id, run_id, type: "tool" | "a2a" | "plan" | "booking" |
 | `confirm_booking` | `proposal_id` | `{ booking_id, confirmation_code }`. **Refuses unless the proposal is `approved` in MongoDB** |
 | `cancel_booking` | `booking_id` | `{ status }` |
 
-**AYLAND Interpreter Agent** (port 8302):
+**AYLAND Interpreter Agent** (port 8302; M2 ships `translate` on Orchu, mn ⇄ en; `POST /api/interpret` calls it over A2A and falls back to Orchu directly if the agent is down):
 
 | Skill | Input | Output |
 |---|---|---|
@@ -428,6 +431,8 @@ agent_events { _id, trip_id, run_id, type: "tool" | "a2a" | "plan" | "booking" |
 | POST | `/api/proposals/{id}/approve` | Consent: calls the Booking Agent over A2A, updates the plan, emits events |
 | POST | `/api/proposals/{id}/reject` | Rejects the proposal |
 | GET | `/api/trips/{trip_id}/events` | *(Should)* SSE stream of plan and booking updates and nudges |
+| GET | `/api/trips/{trip_id}/events/poll?cursor=` | The same events as a long poll (≤20 s): `{ events[], cursor, reset }`. The web client uses this, because Cloudflare quick tunnels buffer streamed responses until they end |
+| GET | `/api/health` | MongoDB, Claude CLI, Novelsoft key, both A2A agents (`ping`) and both MCP servers (`tools/list`), DEMO_MODE |
 | POST | `/api/demo/reset` | Re-seeds demo data (DEMO_MODE only; 403 otherwise) |
 | POST | `/api/demo/scenario` | `{ weather }` set to `"rain"` or `"clear"` switches the scenario (DEMO_MODE only; 403 otherwise) |
 
@@ -520,15 +525,17 @@ Tick a box only after the task's tests pass (offline first, then live, which spe
 
 ### M2: Tools via MCP (H5 to H9)
 
-- [ ] **M2-B1** MCP `travel-data`: `get_weather` (Open-Meteo plus the DEMO_MODE scenario), `search_places`, `get_route`.
-- [ ] **M2-B2** MCP `merchant`: `search_offers` (filters plus a 2dsphere "near" query), `get_offer`, `check_availability`.
-- [ ] **M2-B3** Exercise both servers in the MCP Inspector and add smoke tests in `backend/tests`.
-- [ ] **M2-A1** The orchestrator loads the MCP tools (Tool Runner plus MCP helpers) and the local tools `get_trip` and `get_budget_status`.
+> **M2 build (2026-10-03).** Both MCP servers run as their own processes and were exercised live without spending credit: Open-Meteo, OSRM, Overpass and an Atlas `$geoNear` all answer, and the Claude CLI, configured exactly like the agent, connects to both servers and lists their six tools. The CLI session is isolated from the developer's account (`ENABLE_CLAUDEAI_MCP_SERVERS=false`, no auto memory) and loads every tool up front (`ENABLE_TOOL_SEARCH=false`). Still to run: one live rain question (Claude) for the exit check, the MCP Inspector by hand, and one live `translate` (Novelsoft).
+
+- [ ] **M2-B1** MCP `travel-data`: `get_weather` (Open-Meteo plus the DEMO_MODE scenario), `search_places`, `get_route`. *(built 2026-10-03; offline tests pass, live data checked)*
+- [ ] **M2-B2** MCP `merchant`: `search_offers` (filters plus a 2dsphere "near" query), `get_offer`, `check_availability`. *(built 2026-10-03; offline tests pass, live Atlas checked)*
+- [ ] **M2-B3** Exercise both servers in the MCP Inspector and add smoke tests in `backend/tests`. *(smoke tests built: `tests/test_mcp_servers.py`; Inspector pass still to do)*
+- [ ] **M2-A1** The orchestrator loads the MCP tools (Tool Runner plus MCP helpers) and the local tools `get_trip` and `get_budget_status`. *(built 2026-10-03: HTTP MCP servers in the Claude Agent SDK options; tick after the live rain question)*
 - [ ] **M2-A2** Emit `tool.start` and `tool.end` and write `agent_events`. *(built 2026-10-02; tick after the offline and live tests pass)*
-- [ ] **M2-A3** Prompt v1: compare options, show per-person and total cost, respect the budget, end with a next step.
-- [ ] **M2-C1** Trace panel: a live list of agent steps with status and timings.
-- [ ] **M2-C2** Option cards: title, time, travel time, cost, and a one-line reason.
-- [ ] **M2-D1** Interpreter Agent (A2A) with the `translate` skill.
+- [ ] **M2-A3** Prompt v1: compare options, show per-person and total cost, respect the budget, end with a next step. *(built 2026-10-03; tick after the live rain question)*
+- [ ] **M2-C1** Trace panel: a live list of agent steps with status and timings. *(UI built in v0; live tool events now named as in §8.2; tick after the live rain question)*
+- [ ] **M2-C2** Option cards: title, time, travel time, cost, and a one-line reason. *(built 2026-10-03: `present_options` emits `options`; tick after the live rain question)*
+- [ ] **M2-D1** Interpreter Agent (A2A) with the `translate` skill. *(built 2026-10-03; offline A2A round trip passes; tick after one live translation)*
 
 ### M3: Plan and budget (H8 to H12)
 
@@ -640,13 +647,14 @@ npm run setup            # root tools, frontend (npm) and backend (uv sync)
 npm run check            # MongoDB, Claude (CLI), OyuLLM, tsuurAI → Anir round trip
 npm run seed             # load the Hanoi demo into MongoDB (also the demo reset; in DEMO_MODE a missing or
                          # stale seed is replayed for today when the UI loads the trip)
-npm run dev              # web :3000 + orchestrator :8000 + Booking Agent :8301; choose Mock or Live in the demo controls
+npm run dev              # web :3000, orchestrator :8000, MCP travel-data :8201 and merchant :8202,
+                         # Booking Agent :8301, Interpreter Agent :8302; choose Mock or Live in the demo controls
 npm test                 # backend unit tests;  npm run test:e2e for the browser golden path
 ```
 
-The MCP servers and the Interpreter Agent join `npm run dev` in M2; update this section in that PR.
+Each server also runs alone (`npm run mcp:travel`, `npm run mcp:merchant`, `npm run agent:booking`, `npm run agent:interpreter`), and `/api/health` reports which ones answer. Try the MCP servers by hand in the MCP Inspector (Streamable HTTP, `http://localhost:8201/mcp` or `:8202/mcp`).
 
-**Live demo on this PC:** from a checkout of `demo` with its own `.env`, `powershell -ExecutionPolicy Bypass -File demo-up.ps1 -Build` starts the Booking Agent on :8401, the API on :8100, the web app on :3100 and a Cloudflare quick tunnel, and prints the public URL. `-KeepTunnel` restarts the app without changing the URL; `-Stop` stops everything. Frontend build settings: `AYLAND_API_ORIGIN` (where `/api` goes, default `http://localhost:8000`) and `NEXT_PUBLIC_AYLAND_MODE` (`live` to start in live mode).
+**Live demo on this PC:** from a checkout of `demo` with its own `.env`, `powershell -ExecutionPolicy Bypass -File demo-up.ps1 -Build` starts the MCP servers on :8501 and :8502, the Booking and Interpreter Agents on :8401 and :8402, the API on :8100, the web app on :3100 and a Cloudflare quick tunnel, and prints the public URL. Locally everything streams; through the quick tunnel a chat reply arrives in one piece at the end (quick tunnels buffer streamed responses), while nudges still arrive (long poll). `-KeepTunnel` restarts the app without changing the URL; `-Stop` stops everything. Frontend build settings: `AYLAND_API_ORIGIN` (where `/api` goes, default `http://localhost:8000`) and `NEXT_PUBLIC_AYLAND_MODE` (`live` to start in live mode).
 
 **Environment variables:** see [`.env.example`](.env.example). Secrets: `MONGODB_URI` and `OYU_API_KEY`. Claude needs no key (`CLAUDE_CLI_PATH` only if auto-detection fails). Only `backend/ayland/config.py` reads them.
 
@@ -725,3 +733,4 @@ The MCP servers and the Interpreter Agent join `npm run dev` in M2; update this 
 | 2026-10-02 | v1.4 | M1 live slice: chat on Claude + MongoDB tools, seed, voice and interpreter endpoints, Mock/Live switch, `/api` proxy, `demo-up.ps1`; M1-A1, A2, B2, C1, D2 and M2-A2 built, ticked only after tests |
 | 2026-10-02 | v1.5 | M1-B1 (§8.1 Pydantic models, validated seed writes) and M1-D1 (Booking Agent card + `ping`, orchestrator A2A client) built; §8.3 skill-call convention |
 | 2026-10-02 | v1.5.1 | M1 review: full seed (M1-B2), DEMO_MODE guard, `transcribe/speak(…, lang)` (M1-D2), live SSE fixes (proxy gzip, heartbeat, reconnect), stale-seed refresh |
+| 2026-10-03 | v1.6 | M2 built: MCP `travel-data` and `merchant` (§8.2 inputs now `origin`/`destination` and `{ lon, lat }` points), `present_options` and the `options` event, prompt v1, Interpreter Agent on a shared A2A base, trip-event long poll, CLI isolation from the developer's claude.ai connectors |
