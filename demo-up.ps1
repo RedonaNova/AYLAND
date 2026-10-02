@@ -73,4 +73,7 @@ for ($i = 0; $i -lt 40 -and -not $url; $i++) {
 }
 $ports = ($services | ForEach-Object { "$($_.Name) :$($_.Port)" }) -join "  "
 "Web  http://localhost:$webPort   API  http://localhost:$apiPort   $ports   logs  $logs"
-if ($url) { "Public URL: $url" } else { "Tunnel URL not found yet; see $logs\tunnel.err.log" }
+if ($url) {
+    "Public URL: $url"
+    "Vercel (HANDBOOK section 12): AYLAND_API_ORIGIN must be $url - redeploy there if it changed."
+} else { "Tunnel URL not found yet; see $logs\tunnel.err.log" }
