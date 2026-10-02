@@ -6,6 +6,7 @@ from typing import Any, Literal
 from pymongo.asynchronous.database import AsyncDatabase
 
 from ayland import clock
+from ayland.db import models
 
 TRIP_ID = "trip_hanoi_demo"
 Weather = Literal["clear", "rain"]
@@ -81,16 +82,12 @@ def upcoming_outdoor(trip: dict[str, Any], now_iso: str) -> list[dict[str, Any]]
     return [i for i in items if i["status"] == "planned" and not i["indoor"] and clock.minutes(i["start"]) >= now]
 
 
-def _utc_now() -> datetime:
-    return datetime.now(UTC)
-
-
 async def save_message(db: AsyncDatabase, trip_id: str, role: str, content: str, run_id: str) -> None:
-    await db.messages.insert_one(
-        {"trip_id": trip_id, "role": role, "content": content, "run_id": run_id, "ts": _utc_now()}
-    )
+    message = models.Message(trip_id=trip_id, role=role, content=content, run_id=run_id, ts=datetime.now(UTC))
+    await db.messages.insert_one(message.to_mongo())
 
 
 async def log_event(db: AsyncDatabase, trip_id: str, run_id: str, **fields: Any) -> None:
     """agent_events: every tool, A2A and plan action, for the trace and the judges (§5.4 rule 3)."""
-    await db.agent_events.insert_one({"trip_id": trip_id, "run_id": run_id, "ts": _utc_now(), **fields})
+    event = models.AgentEvent(trip_id=trip_id, run_id=run_id, ts=datetime.now(UTC), **fields)
+    await db.agent_events.insert_one(event.to_mongo())

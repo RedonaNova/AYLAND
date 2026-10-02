@@ -9,6 +9,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 
 from ayland import clock
 from ayland.config import REPO_ROOT
+from ayland.db import models
 
 SEED_FILE = REPO_ROOT / "data" / "seed" / "hanoi.json"
 
@@ -73,7 +74,11 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
 
 async def reset(db: AsyncDatabase) -> str:
     """Replace the demo trip, its offers and bookings, clear its chat and events, set the weather to clear."""
-    trip, offers, bookings = materialize(load_seed(), clock.today())
+    raw_trip, raw_offers, raw_bookings = materialize(load_seed(), clock.today())
+    # Validate against §8.1 before anything is written, so a bad seed never half-replaces the demo.
+    trip = models.Trip.model_validate(raw_trip).to_mongo()
+    offers = [models.Offer.model_validate(o).to_mongo() for o in raw_offers]
+    bookings = [models.Booking.model_validate(b).to_mongo() for b in raw_bookings]
     trip_id = trip["_id"]
     await db.trips.replace_one({"_id": trip_id}, trip, upsert=True)
     await db.offers.delete_many({"_id": {"$in": [o["_id"] for o in offers]}})
