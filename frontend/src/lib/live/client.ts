@@ -25,6 +25,15 @@ interface TripEventPage {
   reset: boolean;
 }
 
+class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
 function postJsonInit(body: unknown): RequestInit {
   return { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
 }
@@ -42,7 +51,7 @@ async function reason(response: Response): Promise<string> {
 export function createLiveClient(base: string): AylandApi {
   async function request(path: string, init?: RequestInit): Promise<Response> {
     const response = await fetch(`${base}${path}`, init);
-    if (!response.ok) throw new Error(await reason(response));
+    if (!response.ok) throw new HttpError(response.status, await reason(response));
     return response;
   }
 
@@ -60,7 +69,8 @@ export function createLiveClient(base: string): AylandApi {
       try {
         return await json<RunPage>(path, { signal });
       } catch (err) {
-        if (signal?.aborted || attempt >= POLL_ATTEMPTS) throw err;
+        const gone = err instanceof HttpError && err.status === 404; // the backend restarted or dropped the run
+        if (signal?.aborted || gone || attempt >= POLL_ATTEMPTS) throw err;
         await new Promise((resolve) => setTimeout(resolve, RETRY_MS.first * attempt));
       }
     }
@@ -74,6 +84,8 @@ export function createLiveClient(base: string): AylandApi {
     const { run_id } = await json<{ run_id: string }>(path, { ...postJsonInit(body), signal });
     const cancel = () => void fetch(`${base}${path}/${run_id}`, { method: "DELETE" }).catch(() => undefined);
     signal?.addEventListener("abort", cancel, { once: true });
+    // A reset that aborts before the run id arrives can't cancel it from here; the backend cancels it instead
+    // (demo reset, and the next question for the trip).
     try {
       for (let cursor = 0; ; ) {
         const page = await runPage(`${path}/${run_id}/events?cursor=${cursor}`, signal);
@@ -81,6 +93,9 @@ export function createLiveClient(base: string): AylandApi {
         if (page.done) return;
         cursor = page.cursor;
       }
+    } catch (err) {
+      if (!signal?.aborted) cancel(); // we stop reading: don't leave the turn holding the trip
+      throw err;
     } finally {
       signal?.removeEventListener("abort", cancel);
     }

@@ -3,6 +3,9 @@
 A turn no longer lives inside one HTTP response: it runs as a task, and every event it emits is kept on the
 run. A client polls `events_after(cursor)`, so live mode works through anything that buffers streamed
 responses (Cloudflare quick tunnels, a Vercel proxy). The SSE endpoint reads the same run.
+
+At most one turn per trip runs at a time (Agent._turns), and a new question cancels a turn nobody is reading
+any more (a closed tab, a reset whose cancel never arrived), so it can't hold the trip's lock.
 """
 
 import asyncio
@@ -23,23 +26,27 @@ class Run:
     events: list[Event] = field(default_factory=list)
     done: bool = False
     task: asyncio.Task[None] | None = None
-    changed: asyncio.Condition = field(default_factory=asyncio.Condition)
+    _wake: asyncio.Event = field(default_factory=asyncio.Event)
 
-    async def add(self, event: Event) -> None:
-        async with self.changed:
-            self.events.append(event)
-            self.changed.notify_all()
+    def _notify(self) -> None:
+        self._wake.set()
+        self._wake = asyncio.Event()  # the next waiter waits for the next change
 
-    async def finish(self) -> None:
-        async with self.changed:
+    def add(self, event: Event) -> None:
+        self.events.append(event)
+        self._notify()
+
+    def finish(self) -> None:
+        """Idempotent; also called from the task's done-callback, so a run cancelled before it started ends too."""
+        if not self.done:
             self.done = True
-            self.changed.notify_all()
+            self._notify()
 
     async def events_after(self, cursor: int, timeout_s: float) -> dict[str, Any]:
         """The events after `cursor`, waiting up to `timeout_s` for the first one (or for the end)."""
-        async with self.changed:
+        if len(self.events) <= cursor and not self.done:
             try:
-                await asyncio.wait_for(self.changed.wait_for(lambda: len(self.events) > cursor or self.done), timeout_s)
+                await asyncio.wait_for(self._wake.wait(), timeout_s)
             except TimeoutError:
                 pass
         if len(self.events) > cursor and not self.done:
@@ -66,18 +73,26 @@ class Runs:
     def start(self, trip_id: str, turn: Callable[[Run], AsyncIterator[Event]], run_id: str | None = None) -> Run:
         """Run `turn(run)` in the background, recording every event it yields."""
         self._prune()
+        self.cancel_trip(trip_id)  # one live turn per trip: the newest question wins
         run = Run(id=run_id or f"run_{uuid.uuid4().hex[:10]}", trip_id=trip_id)
 
         async def drive() -> None:
+            events = turn(run)
             try:
-                async for event in turn(run):
-                    await run.add(event)
+                async for event in events:
+                    run.add(event)
             finally:
-                await run.finish()
-                self._finished_at[run.id] = asyncio.get_running_loop().time()
+                # Close the turn now, not whenever it is garbage-collected: its cleanup (dropping a cut-short
+                # Claude session, releasing the trip's turn lock) must run before the next question.
+                await events.aclose()
+
+        def ended(_: asyncio.Task[None]) -> None:
+            run.finish()
+            self._finished_at[run.id] = asyncio.get_running_loop().time()
 
         self._runs[run.id] = run
         run.task = asyncio.create_task(drive())
+        run.task.add_done_callback(ended)
         return run
 
     def get(self, run_id: str) -> Run | None:
@@ -89,6 +104,10 @@ class Runs:
             return False
         run.task.cancel()  # ends the agent turn, which drops its Claude session (Agent.run)
         return True
+
+    def cancel_trip(self, trip_id: str) -> int:
+        """Cancel every unfinished turn of a trip (demo reset, or a new question after an abandoned one)."""
+        return sum(self.cancel(run.id) for run in list(self._runs.values()) if run.trip_id == trip_id)
 
     def _prune(self) -> None:
         now = asyncio.get_running_loop().time()

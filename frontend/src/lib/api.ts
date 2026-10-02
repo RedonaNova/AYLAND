@@ -24,7 +24,7 @@ export interface Interpretation {
 export interface AylandApi {
   /** GET /api/trips/{trip_id} */
   getTrip(tripId: string): Promise<TripView>;
-  /** POST /api/chat → SSE */
+  /** A chat turn: live mode starts it with POST /api/chat/runs and long-polls its events; aborting cancels it. */
   chat(req: { trip_id: string; message: string }, signal?: AbortSignal): AsyncIterable<AgentEvent>;
   /** POST /api/proposals/{id}/approve → SSE. The only path that spends money (consent gate). */
   approveProposal(proposalId: string, method: "tap" | "voice", signal?: AbortSignal): AsyncIterable<AgentEvent>;
