@@ -9,6 +9,8 @@ import { hhmm, usd } from "@/lib/format";
 import type { TripOption } from "@/lib/types";
 
 const TINT = ["from-sun-400/[0.10]", "from-dawn-500/[0.10]", "from-dusk-500/[0.12]"];
+/** The merchant's price as published: $1.20 must not read "$1". */
+const exactUsd = (amount: number) => usd(amount, Number.isInteger(amount) ? 0 : 2);
 const BADGE = [
   "from-sun-400/30 to-sun-500/10 text-sun-300",
   "from-dawn-500/30 to-dawn-500/10 text-rose-400",
@@ -30,7 +32,7 @@ export function OptionCards({
     <div className="grid gap-2.5">
       {options.map((option, i) => (
         <OptionCard
-          key={option.offer._id}
+          key={`${option.offer._id}@${option.slot_start}`}
           option={option}
           index={i}
           selected={selectedOfferId === option.offer._id}
@@ -94,12 +96,14 @@ function OptionCard({
       </div>
 
       <div className="relative mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-white/[0.06] pt-2.5 text-[12px]">
-        <span className="tabular-nums">
-          <span className="font-semibold text-fg">{usd(offer.price.amount)}</span>
-          <span className="text-fg-subtle">{mn.option.perPerson}</span>
-        </span>
+        {offer.price.per === "person" && (
+          <span className="tabular-nums">
+            <span className="font-semibold text-fg">{exactUsd(offer.price.amount)}</span>
+            <span className="text-fg-subtle">{mn.option.perPerson}</span>
+          </span>
+        )}
         <span className="tabular-nums text-fg-muted">
-          {mn.option.total} <span className="font-semibold text-fg">{usd(option.price_total.amount)}</span>
+          {mn.option.total} <span className="font-semibold text-fg">{exactUsd(option.price_total.amount)}</span>
         </span>
         <span className="flex items-center gap-1 text-fg-muted">
           <TravelIcon className="size-3.5" />

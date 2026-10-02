@@ -29,8 +29,10 @@ export function TodayPanel() {
       </header>
 
       <div className="grid grid-cols-2 gap-3">
-        {view.weather ? <WeatherCard weather={view.weather} now={view.now} /> : <div />}
-        <BudgetMeter budget={dayBudget(view.trip, today)} />
+        {view.weather && <WeatherCard weather={view.weather} now={view.now} />}
+        <div className={view.weather ? undefined : "col-span-2"}>
+          <BudgetMeter budget={dayBudget(view.trip, today)} />
+        </div>
       </div>
 
       <div className="h-60">

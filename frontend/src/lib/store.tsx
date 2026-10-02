@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { mn } from "@/i18n/mn";
 import { A2A_AGENTS, A2A_SKILL_LABELS, type NodeId, toolMeta } from "./agents";
-import { type ApiMode, getApi, type Health } from "./api";
+import { type ApiMode, getApi, type Health, type Interpretation } from "./api";
 import { useApiMode } from "./mode";
 import { TRIP_ID } from "./mock/seed";
 import type { A2AStatus, AgentEvent, Booking, Lang, NudgeAction, Proposal, TripOption, TripView } from "./types";
@@ -80,7 +80,7 @@ interface Store {
   reset: () => Promise<void>;
   /** Why the last demo control (weather, reset) failed; cleared by the next one that works. */
   demoError: string | null;
-  interpret: (text: string, source: Lang, target: Lang) => Promise<{ text: string; pronunciation_hint?: string }>;
+  interpret: (text: string, source: Lang, target: Lang) => Promise<Interpretation>;
   nextVoiceLine: () => string;
   /** "mock" runs the scripted orchestrator in the browser; "live" talks to the FastAPI backend. */
   mode: ApiMode;
@@ -376,10 +376,17 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   const interpret = useCallback(
     async (text: string, source: Lang, target: Lang) => {
       setInterpreting(true);
+      const summary = `${source} → ${target}`;
       try {
         const result = await api.interpret({ text, source_lang: source, target_lang: target });
-        addLog({ type: "a2a", name: "interpreter-agent.translate", node: "interpreter", summary: `${source} → ${target}`, ok: true });
+        // The backend says which path answered: the A2A Interpreter Agent, or Orchu directly while it is down.
+        const direct = result.via === "orchu";
+        const name = direct ? "orchu.translate" : "interpreter-agent.translate";
+        addLog({ type: direct ? "tool" : "a2a", name, node: "interpreter", summary, ms: result.ms, ok: true });
         return result;
+      } catch (err) {
+        addLog({ type: "a2a", name: "interpreter-agent.translate", node: "interpreter", summary: errorMessage(err), ok: false });
+        throw err;
       } finally {
         setInterpreting(false);
       }

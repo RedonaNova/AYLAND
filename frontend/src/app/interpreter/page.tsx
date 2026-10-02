@@ -78,7 +78,7 @@ export default function InterpreterPage() {
       setTurns((prev) => [...prev, { id: prev.length + 1, side, source: text, translated: result.text, hint: result.pronunciation_hint }]);
       if (sound) await voiceOut(result.text, to).catch(() => undefined);
     } catch {
-      setVoiceError(mn.live.sttFailed);
+      setVoiceError(mn.live.translateFailed);
     } finally {
       setTranslating(false);
     }
