@@ -47,13 +47,13 @@ export interface DayBudget {
   remaining: number;
 }
 
+const cents = (amount: number) => Math.round(amount * 100) / 100;
+
 /**
  * Today's money: done items count as spent, booked items as committed,
  * planned items as expected. Remaining is what is free to spend.
+ * The same formula as the backend's budget service (backend/ayland/budget.py `day`), rounding included.
  */
-const cents = (amount: number) => Math.round(amount * 100) / 100;
-
-/** The same formula as the backend's budget service (backend/ayland/budget.py `day`), rounding included. */
 export function dayBudget(trip: Trip, date: string): DayBudget {
   const items = dayOf(trip, date)?.items ?? [];
   const sum = (status: PlanItemStatus) =>
