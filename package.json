@@ -4,9 +4,12 @@
   "description": "AYLAND: AI travel companion for Mongolian travelers (Team Morgensonne). See HANDBOOK.md.",
   "scripts": {
     "setup": "npm install && npm --prefix frontend install && uv --directory backend sync",
-    "dev": "concurrently -k -n web,api,booking -c magenta,cyan,yellow \"npm --prefix frontend run dev\" \"npm run api\" \"npm run agent:booking\"",
+    "dev": "concurrently -k -n web,api,travel,merchant,booking,interp -c magenta,cyan,green,blue,yellow,red \"npm --prefix frontend run dev\" \"npm run api\" \"npm run mcp:travel\" \"npm run mcp:merchant\" \"npm run agent:booking\" \"npm run agent:interpreter\"",
     "api": "uv --directory backend run uvicorn ayland.orchestrator.app:app --reload --port 8000 --timeout-graceful-shutdown 3",
+    "mcp:travel": "uv --directory backend run uvicorn ayland.mcp_servers.travel_data.server:app --port 8201",
+    "mcp:merchant": "uv --directory backend run uvicorn ayland.mcp_servers.merchant.server:app --port 8202",
     "agent:booking": "uv --directory backend run uvicorn ayland.a2a_agents.booking.server:app --port 8301",
+    "agent:interpreter": "uv --directory backend run uvicorn ayland.a2a_agents.interpreter.server:app --port 8302",
     "seed": "uv --directory backend run python -m scripts.seed",
     "build": "npm --prefix frontend run build",
     "start": "npm --prefix frontend run start",
