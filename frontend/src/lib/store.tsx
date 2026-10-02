@@ -6,7 +6,7 @@ import { A2A_AGENTS, A2A_SKILL_LABELS, type NodeId, toolMeta } from "./agents";
 import { type ApiMode, getApi, type Health, type Interpretation } from "./api";
 import { useApiMode } from "./mode";
 import { TRIP_ID } from "./mock/seed";
-import type { A2AStatus, AgentEvent, Booking, Lang, NudgeAction, Proposal, TripOption, TripView } from "./types";
+import type { A2AStatus, AgentEvent, Booking, Lang, NudgeAction, Offer, Proposal, TripOption, TripView } from "./types";
 
 export type StepStatus = "running" | "ok" | "error";
 
@@ -37,6 +37,8 @@ export interface AssistantItem {
   /** Length of `text` when the options arrived, so cards render between intro and closing. */
   optionsAt?: number;
   proposal?: Proposal;
+  /** The proposal's offer, when it came with the event (live mode), so the card shows it without option cards. */
+  proposalOffer?: Offer;
   proposalState?: ProposalState;
   booking?: Booking;
 }
@@ -221,7 +223,12 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
           setItems((prev) =>
             prev.map((it) => (it.kind === "assistant" && it.proposalState === "proposed" ? { ...it, proposalState: "expired" } : it)),
           );
-          patchAssistant(itemId, (it) => ({ ...it, proposal: event.data.proposal, proposalState: "proposed" }));
+          patchAssistant(itemId, (it) => ({
+            ...it,
+            proposal: event.data.proposal,
+            proposalOffer: event.data.offer,
+            proposalState: "proposed",
+          }));
           break;
         case "booking.confirmed":
           patchAssistant(itemId, (it) => ({ ...it, booking: event.data.booking }));

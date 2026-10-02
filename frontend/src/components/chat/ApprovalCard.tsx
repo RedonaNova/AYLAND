@@ -51,7 +51,7 @@ export function ApprovalCard({ proposal, state, offer, travelers, disabled, onAp
         <Field
           label={mn.approval.total}
           value={usd(proposal.total.amount, 2)}
-          hint={offer ? `${usd(offer.price.amount)} × ${proposal.party_size}` : undefined}
+          hint={offer?.price.per === "person" ? `${usd(offer.price.amount, Number.isInteger(offer.price.amount) ? 0 : 2)} × ${proposal.party_size}` : undefined}
           strong
         />
         <Field label={mn.approval.cancellation} value={offer?.cancellation_policy ?? "—"} />

@@ -107,7 +107,9 @@ export function createLiveClient(base: string): AylandApi {
     async *approveProposal() {
       yield { type: "error", data: { message: mn.live.notYet } };
     },
-    async rejectProposal() {},
+    async rejectProposal(proposalId) {
+      await request(`/proposals/${proposalId}/reject`, { method: "POST" });
+    },
     interpret: (req) => postJson("/interpret", req),
     tripEvents(tripId, onEvent, onReconnect) {
       // A long poll, not EventSource: Cloudflare quick tunnels buffer streamed responses until they end, so an

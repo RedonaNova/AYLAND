@@ -152,7 +152,7 @@ export const mn = {
     checking: "Холбогдож байна…",
   },
   live: {
-    notYet: "Захиалга live горимд M3–M4-д нэмэгдэнэ. Одоохондоо Mock горимд үзүүлнэ үү.",
+    notYet: "Live горимд баталгаажуулах нь M4-д нэмэгдэнэ. Одоохондоо Mock горимд үзүүлнэ үү.",
     unreachable: "Backend ажиллахгүй байна (npm run dev эсвэл demo-up.ps1)",
     demoModeOff: "DEMO_MODE унтраалттай: цаг агаар, reset ажиллахгүй",
     micDenied: "Микрофонд хандах зөвшөөрөл алга.",
