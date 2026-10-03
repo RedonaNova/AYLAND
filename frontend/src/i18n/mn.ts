@@ -49,6 +49,8 @@ export const mn = {
     send: "Илгээх",
     mic: "Дуугаар асуух",
     stopMic: "Зогсоох",
+    voiceMute: "Хариултыг дуугүй болгох",
+    voiceUnmute: "Хариултыг чангаар унших",
     stepsRunning: "Агент ажиллаж байна",
     steps: (n: number, sec: string | null) => (sec ? `${n} алхам · ${sec} сек` : `${n} алхам`),
     suggestions: {

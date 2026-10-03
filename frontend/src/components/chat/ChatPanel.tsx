@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronUp } from "lucide-react";
+import { ChevronUp, Volume2, VolumeX } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { SunMark } from "@/components/shell/SunMark";
@@ -9,6 +9,7 @@ import { WeatherIcon } from "@/components/today/WeatherCard";
 import { mn } from "@/i18n/mn";
 import { cn } from "@/lib/cn";
 import { dayBudget, tripDay, usd } from "@/lib/format";
+import { useReplyVoice } from "@/lib/live/replyVoice";
 import { useStore } from "@/lib/store";
 import { Composer } from "./Composer";
 import { MessageList } from "./Messages";
@@ -62,7 +63,8 @@ export function ChatPanel() {
 }
 
 function ChatHeader({ onOpenToday }: { onOpenToday: () => void }) {
-  const { view, busy } = useStore();
+  const { view, busy, items, mode, speak } = useStore();
+  const voice = useReplyVoice(items, mode, speak);
   const remaining = view ? dayBudget(view.trip, view.now.slice(0, 10)).remaining : null;
 
   return (
@@ -90,11 +92,24 @@ function ChatHeader({ onOpenToday }: { onOpenToday: () => void }) {
           </span>
         </div>
       </div>
+      <span className="ml-auto" />
+      {mode === "live" && (
+        <button
+          type="button"
+          onClick={voice.toggleMuted}
+          aria-label={voice.muted ? mn.chat.voiceUnmute : mn.chat.voiceMute}
+          aria-pressed={!voice.muted}
+          title={voice.muted ? mn.chat.voiceUnmute : mn.chat.voiceMute}
+          className="grid size-9 shrink-0 place-items-center rounded-full text-fg-muted transition-colors hover:bg-white/[0.06] hover:text-fg"
+        >
+          {voice.muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+        </button>
+      )}
       {view && remaining !== null && (
         <button
           type="button"
           onClick={onOpenToday}
-          className="surface ml-auto flex items-center gap-2 rounded-full py-1.5 pl-2.5 pr-3 text-xs xl:hidden"
+          className="surface flex items-center gap-2 rounded-full py-1.5 pl-2.5 pr-3 text-xs xl:hidden"
         >
           {view.weather && (
             <>

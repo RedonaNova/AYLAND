@@ -575,7 +575,7 @@ Tick a box only after the task's tests pass (offline first, then live, which spe
 
 ### M5: Voice and interpreter (H15 to H19)
 
-- [ ] **M5-C1** Push-to-talk mic: record, transcribe, show the transcript, send to chat. Replies play through TTS (with a mute toggle).
+- [x] **M5-C1** Push-to-talk mic: record, transcribe, show the transcript, send to chat. Replies play through TTS (with a mute toggle). *Live mode: Anir in, tsuurAI out (`lib/live/replyVoice.ts`); `e2e/live-voice.spec.ts`.*
 - [ ] **M5-C2** Interpreter screen: two large buttons ("Би" and "Тэд"), large translated text for showing to locals, audio playback.
 - [ ] **M5-D1** Interpreter flow: STT in the source language (Anir for mn, browser for en), A2A `translate` (Orchu), TTS in the target language (tsuurAI for mn, browser for en). English for now; later the target language comes from the trip destination.
 - [ ] **M5-A1** Nudges: a rain alert when the scenario changes, and "time to leave" after a booking, using `get_route`.
