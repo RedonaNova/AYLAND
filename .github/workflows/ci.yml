@@ -1,0 +1,43 @@
+# Checks every pull request (HANDBOOK §11): offline only, so no keys and no paid calls.
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, demo, main]
+  push:
+    branches: [dev]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv --directory backend sync
+      - run: uv --directory backend run ruff check .
+      - run: uv --directory backend run ruff format --check .
+      - run: uv --directory backend run pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      # Mock mode and scripted live mode only: no backend, Claude or Novelsoft needed.
+      - run: npm run test:e2e

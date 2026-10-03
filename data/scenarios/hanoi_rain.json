@@ -1,0 +1,19 @@
+{
+  "_comment": "DEMO_MODE weather (HANDBOOK §3): what get_weather and the trip view report for Hanoi while the demo controls say clear or rain. Hourly rows are [local time, condition, precipitation %, °C]. Rain sets in at 10:00 and clears at 18:00, so at DEMO_NOW (10:30) it is raining until 18:00. A request counts as Hanoi by any of `names`, or by coordinates within `radius_km` of `location` [lon, lat].",
+  "city": "Hanoi",
+  "names": ["Hanoi", "Ha Noi", "Hà Nội", "Ханой"],
+  "location": [105.8542, 21.0285],
+  "radius_km": 40,
+  "clear": [
+    ["08:00", "clouds", 10, 27], ["09:00", "clouds", 10, 28], ["10:00", "clouds", 10, 29], ["11:00", "clouds", 10, 30],
+    ["12:00", "clear", 5, 31], ["13:00", "clear", 5, 31], ["14:00", "clear", 5, 31], ["15:00", "clouds", 10, 30],
+    ["16:00", "clouds", 15, 30], ["17:00", "clouds", 15, 29], ["18:00", "clouds", 10, 28], ["19:00", "clouds", 10, 27],
+    ["20:00", "clouds", 10, 27], ["21:00", "clouds", 10, 26], ["22:00", "clouds", 10, 26]
+  ],
+  "rain": [
+    ["08:00", "clouds", 40, 27], ["09:00", "clouds", 60, 27], ["10:00", "rain", 90, 26], ["11:00", "rain", 90, 25],
+    ["12:00", "rain", 85, 25], ["13:00", "rain", 90, 25], ["14:00", "rain", 95, 24], ["15:00", "rain", 90, 24],
+    ["16:00", "rain", 80, 24], ["17:00", "rain", 70, 24], ["18:00", "clouds", 40, 25], ["19:00", "clouds", 30, 25],
+    ["20:00", "clouds", 20, 25], ["21:00", "clouds", 20, 24], ["22:00", "clouds", 15, 24]
+  ]
+}
