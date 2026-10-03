@@ -17,10 +17,18 @@ from ayland.db import repo
 from ayland.db.client import get_db
 from ayland.mcp_servers.merchant.catalog import group_total
 
-from . import offers, plan, proposals
+from . import memory, offers, plan, proposals
 
 SERVER = "ayland"
-LOCAL = ("get_trip", "get_budget_status", "present_options", "update_trip_plan", "undo_plan_change", "propose_booking")
+LOCAL = (
+    "get_trip",
+    "get_budget_status",
+    "present_options",
+    "update_trip_plan",
+    "undo_plan_change",
+    "propose_booking",
+    "remember",
+)
 REMOTE = {
     "travel-data": ("get_weather", "search_places", "get_route"),
     "merchant": ("search_offers", "get_offer", "check_availability"),
@@ -35,6 +43,9 @@ Event = dict[str, Any]
 outbox: dict[str, list[Event]] = {}
 # The run id of each trip's current turn, for agent_events written by the tools (set by Agent.run).
 turn_runs: dict[str, str] = {}
+# The user each trip's current turn speaks for (a welcome-flow visitor, or the trip owner), for `remember`.
+turn_users: dict[str, str] = {}
+MEMORY_MAX = 200
 
 
 def emit(trip_id: str, kind: str, **data: Any) -> None:
@@ -249,6 +260,29 @@ PROPOSE_SCHEMA = {
 }
 
 
+REMEMBER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "text": {"type": "string", "description": "One short Mongolian sentence, e.g. 'Ээж нь хол алхаж чаддаггүй.'"},
+        "kind": {"type": "string", "enum": ["preference", "fact"]},
+    },
+    "required": ["text", "kind"],
+}
+
+
+async def remember_fact(trip_id: str, args: dict[str, Any]) -> dict[str, Any]:
+    """The `remember` tool: one sentence about the traveler who is asking, kept for later turns and trips."""
+    user_id = turn_users.get(trip_id, "")
+    sentence = str(args.get("text", "")).strip()
+    kind = "preference" if args.get("kind") == "preference" else "fact"
+    if not user_id:
+        return _refused(ValueError("No traveler to remember this for."))
+    if not sentence or len(sentence) > MEMORY_MAX:
+        return _refused(ValueError(f"Give one Mongolian sentence of at most {MEMORY_MAX} characters."))
+    await memory.remember(get_db(), user_id, sentence, kind, trip_id)
+    return _result({"summary": "Санах ойд хадгаллаа", "saved": sentence})
+
+
 def build_server(trip_id: str) -> McpSdkServerConfig:
     """The tools are bound to one trip, so the model never has to pass (or guess) its id. `run_id` for
     agent_events is the trip's current turn, which the agent loop records in `turn_runs`."""
@@ -324,6 +358,15 @@ def build_server(trip_id: str) -> McpSdkServerConfig:
         emit(trip_id, "proposal.created", proposal=result["proposal"], offer=result["offer"])
         return _result({k: v for k, v in result.items() if k != "offer"})
 
+    @tool(
+        "remember",
+        "Save a lasting preference or fact the traveler told you about themselves or their group, for this and"
+        " future trips.",
+        REMEMBER_SCHEMA,
+    )
+    async def remember(args: dict[str, Any]) -> dict[str, Any]:
+        return await remember_fact(trip_id, args)
+
     tools: list[SdkMcpTool[Any]] = [
         get_trip,
         get_budget_status,
@@ -331,6 +374,7 @@ def build_server(trip_id: str) -> McpSdkServerConfig:
         update_trip_plan,
         undo_plan_change,
         propose_booking,
+        remember,
     ]
     return create_sdk_mcp_server(SERVER, tools=tools)
 

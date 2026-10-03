@@ -52,7 +52,8 @@ def test_tool_names_drop_the_mcp_prefix() -> None:
     assert tools.display_name("mcp__merchant__search_offers") == "search_offers"
     assert tools.display_name("mcp__travel-data__get_route") == "get_route"
     assert tools.display_name("mcp__ayland__present_options") == "present_options"
-    assert "mcp__travel-data__get_weather" in tools.ALLOWED and len(tools.ALLOWED) == 12
+    assert "mcp__travel-data__get_weather" in tools.ALLOWED and len(tools.ALLOWED) == 13
+    assert "mcp__ayland__remember" in tools.ALLOWED
 
 
 class FakeClient:
