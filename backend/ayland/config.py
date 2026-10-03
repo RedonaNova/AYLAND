@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -40,6 +41,11 @@ class Settings(BaseSettings):
     mcp_merchant_url: str = "http://localhost:8202/mcp"
     a2a_booking_url: str = "http://localhost:8301"
     a2a_interpreter_url: str = "http://localhost:8302"
+
+    # Welcome flow: OyuLLM writes each visitor's summary and starter suggestions (decision D1), at most this many
+    # a day per process, so a burst of public visitors can't drain the shared credit.
+    onboarding_llm: Literal["oyu", "off"] = "oyu"
+    onboarding_llm_daily_cap: int = 200
 
     # Demo (HANDBOOK §3)
     demo_mode: bool = True
