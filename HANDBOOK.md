@@ -8,7 +8,7 @@ This handbook is our single source of truth for **what** we build, **how** the p
 
 - **First time here?** Read §1 to §4 (about 10 minutes).
 - **While coding,** keep §7 (repo layout), §8 (contracts) and §10 (roadmap) open.
-- **Status:** v1.10 draft (2026-10-03). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
+- **Status:** v1.11 draft (2026-10-03). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
 
 ---
 
@@ -322,8 +322,16 @@ Contracts let everyone build in parallel against agreed shapes. **We freeze v1 a
 
 ```js
 users {
-  _id, name, language: "mn",
-  preferences: { interests: [], food: [], pace: "relaxed" | "normal" | "packed", notes }
+  _id, name, language: "mn",                     // seed users ("user_bat") or welcome-flow visitors ("v_<uuid>")
+  preferences: { interests: [], food: [], pace: "relaxed" | "normal" | "packed", notes },
+  profile?: {                                     // the welcome flow's answers; every field optional
+    name, party: "solo" | "couple" | "family" | "friends", party_size, kids,
+    budget: "thrifty" | "mid" | "comfort", splurge: ["stay" | "food" | "experiences" | "shopping"],
+    pace, diet: ["halal" | "vegetarian" | "no_seafood" | "mild_spice" | "dairy_free"], misses_mongolian_food,
+    interests: ["history" | "food" | "nature" | "art" | "shopping" | "nightlife" | "photo" | "spa" | "kids"],
+    english: "fluent" | "some" | "none", notes
+  },
+  updated_at?
 }
 
 trips {
@@ -359,7 +367,7 @@ proposals  { _id, trip_id, offer_id, slot_start, party_size, total: Money,
 bookings   { _id, trip_id, proposal_id, offer_id, status: "held" | "confirmed" | "cancelled",
              confirmation_code, total: Money, consent: { approved_at, method: "tap" | "voice" }, created_at }
 
-memories   { _id, user_id, trip_id?, kind: "preference" | "fact" | "feedback", text, embedding?, created_at }
+memories   { _id, user_id, trip_id?, kind: "preference" | "fact" | "feedback", source: "onboarding" | "chat" | "seed", text, embedding?, created_at }
 
 messages   { _id, trip_id, role, content, run_id, ts }  // the turn's text; Claude's own history lives in its CLI session
 
@@ -369,7 +377,7 @@ agent_events { _id, trip_id, run_id, type: "tool" | "a2a" | "plan" | "booking" |
                name, input, output_summary, ok, ms, ts }
 ```
 
-**Indexes:** `offers.location` (2dsphere), `proposals.trip_id`, `bookings.trip_id`, `messages (trip_id, ts)`, `agent_events (trip_id, ts)`, `trip_versions (trip_id, version)`. *Should:* Atlas Vector Search indexes on `offers.embedding` and `memories.embedding`.
+**Indexes:** `offers.location` (2dsphere), `proposals.trip_id`, `bookings.trip_id`, `messages (trip_id, ts)`, `agent_events (trip_id, ts)`, `trip_versions (trip_id, version)`, `memories (user_id, created_at desc)`. *Should:* Atlas Vector Search indexes on `offers.embedding` and `memories.embedding`.
 
 ### 8.2 Tools
 
@@ -401,7 +409,8 @@ Tool inputs take points as `{ lon, lat }` (the model can't swap a named pair); o
 | `update_trip_plan` | `changes[]`: `cancel` / `move` (`start`, `end`, optional `date`) / `add` (`item`) / `replace` (`item_id`, `item`); `reason`; optional `date` | New `version`, the changed ids and today's budget; emits `plan.updated` on the trip events. Only `planned` items change (booked ones go through the consent gate); new items are free or pay-on-site, never offers; clashes, past times and going over the daily limit are refused with a reason |
 | `propose_booking` | `offer_id`, `slot_start`, `party_size` (default the party) | A proposal with `status: proposed` (any other open one expires), `fits_budget`, `remaining_after_usd`; emits `proposal.created { proposal, offer }` |
 | `undo_plan_change` | (none) | Brings the previous version back as a new version (so an undo can be undone); refused once a booking changed since |
-| `remember` / `recall` *(Should)* | `text` / `query` | Writes a memory / returns the top-k memories |
+| `remember` | `text` (one Mongolian sentence, ≤ 200), `kind` (`preference` or `fact`) | Saves a memory for the traveler who is asking (`source: "chat"`). Every turn already starts with that traveler's profile and latest 12 memories, so there is no `recall` call on the hot path |
+| `recall` *(Should)* | `query` | Returns the top-k memories by vector search |
 
 ### 8.3 A2A agents
 
@@ -426,7 +435,8 @@ Tool inputs take points as `{ lon, lat }` (the model can't swap a named pair); o
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/chat` | `{ trip_id, message }` returns an SSE event stream (below) |
+| POST | `/api/chat` | `{ trip_id, message, user_id? }` returns an SSE event stream (below). `user_id` (a `v_<uuid>` visitor who finished the welcome flow) picks whose profile and memories start the turn; without it, the trip owner's |
+| POST | `/api/profile` | `{ visitor_id: "v_<uuid>", answers }` (the welcome flow): saves `users.profile` and one onboarding memory per answer; returns `{ summary, suggestions[3], via: "oyu" }` written by OyuLLM, or `{ summary: null, suggestions: [], via: null }` (the web app then uses its templates). Other ids → 422 |
 | POST | `/api/chat/runs` | The same turn, started in the background: returns `{ run_id }` (what the web client uses) |
 | GET | `/api/chat/runs/{run_id}/events?cursor=` | Long poll (≤20 s): `{ events[], cursor, done }`, the same events as the SSE stream; works through proxies that buffer streams |
 | DELETE | `/api/chat/runs/{run_id}` | Cancels a turn (reset or mode switch mid-turn) |
@@ -489,7 +499,7 @@ Fill in names at kickoff. One owner per workstream; everyone helps at integratio
 | Workstream | Folders it owns | What is left for it (from 2026-10-03) |
 |---|---|---|
 | **A: Agent core + Booking Agent** | `backend/ayland/orchestrator/`, `backend/ayland/a2a_agents/booking/`, `backend/ayland/budget.py` | M3 live check; **M4-D1** hold/confirm/cancel; **M4-A1** approve endpoint (A2A confirm, plan → booked, budget, events, Mongolian summary); M5-A1 "time to leave" nudge |
-| **B: Data, tools, voice, OyuLLM** | `backend/ayland/mcp_servers/`, `backend/ayland/db/`, `data/`, `backend/ayland/voice/`, `backend/ayland/llm/`, `backend/ayland/a2a_agents/interpreter/` | Voice hand test (M1-D2); MCP Inspector (M2-B3); **D1: a real job for OyuLLM** (required tech, 10% of judging; not used in the live flow yet); M3-B2 vector search and M3-B3 memories *(Should)* |
+| **B: Data, tools, voice, OyuLLM** | `backend/ayland/mcp_servers/`, `backend/ayland/db/`, `data/`, `backend/ayland/voice/`, `backend/ayland/llm/`, `backend/ayland/a2a_agents/interpreter/` | Voice hand test (M1-D2); MCP Inspector (M2-B3); **D1, settled:** OyuLLM writes each visitor's welcome summary and starter suggestions (`POST /api/profile`, capped by `ONBOARDING_LLM_DAILY_CAP`); the AYLAND Network adds the Mongolian host note (spec in `docs/superpowers/specs/`); M3-B2 vector search and `recall` *(Should)* |
 | **C: Experience + demo** | `frontend/`, `docs/`, `demo-up.ps1` | Live approval card (M4-C1, with A); design pass with `frontend-design`; Vercel deploy (repo owner); M6 demo script, deck, backup video |
 
 Shared files, edited in small separate commits and announced in chat: `HANDBOOK.md`, `package.json`, `.env.example`, `backend/ayland/db/models.py` and `frontend/src/lib/types.ts` (the §8 contracts), `backend/ayland/orchestrator/tools.py` (A and B both add tools).
@@ -561,7 +571,8 @@ Tick a box only after the task's tests pass (offline first, then live, which spe
 - [ ] **M3-A2** `propose_booking` tool that writes to `proposals` and emits `proposal.created`. *(built 2026-10-03, with `POST /api/proposals/{id}/reject`; tick after a live proposal)*
 - [ ] **M3-B1** Budget service: planned, booked and remaining for today. *(built 2026-10-03: `ayland/budget.py`, the same formula as the web meter; offline tests pass; tick after a live re-plan)*
 - [ ] **M3-B2** *(Should)* Embed offers, create the Atlas Vector Search index, and use semantic search inside `search_offers`.
-- [ ] **M3-B3** *(Should)* `remember` and `recall` tools on `memories`.
+- [ ] **M3-B3** *(Should)* `remember` and `recall` tools on `memories`. *(`remember` built 2026-10-03 with the welcome flow, and every turn starts with the traveler's profile and latest memories; `recall` with vector search is still open)*
+- [x] **M3-C3** Welcome flow: seven skippable questions once per browser, a live traveler portrait, answers saved as the visitor's memories (`POST /api/profile`), OyuLLM's summary and starter suggestions with template fallback, the chat greeting by name. *(offline tests and Playwright pass; spec and plan in `docs/superpowers/`)*
 - [ ] **M3-C1** Today's timeline with live updates on `plan.updated`, plus the budget meter. *(UI built in v0; live `plan.updated` refreshes it, Playwright-tested against a scripted backend; tick after a live re-plan)*
 - [ ] **M3-C2** *(Should)* Map with the hotel and plan items as pins and a route line to the next item. *(UI built in v0; it follows the live plan and option cards)*
 
@@ -810,3 +821,4 @@ Live mode works through Vercel and the tunnel even though both may buffer stream
 | 2026-10-03 | v1.8 | M3 built: `update_trip_plan` (cancel / move / add / replace, versioned in `trip_versions`) and `undo_plan_change`, `propose_booking` with `proposal.created { proposal, offer }`, reject endpoint, budget service; prompt v2 |
 | 2026-10-03 | v1.9 | Team setup: shared CLAUDE.md and plugins (.claude/settings.json), CI on every PR, PR template, folder ownership per workstream (§9) and how to work in parallel (§11) |
 | 2026-10-03 | v1.10 | Backend on a Linux server with pm2 (`ecosystem.config.cjs`, §12); Vercel deploys from `main` |
+| 2026-10-03 | v1.11 | Welcome flow (M3-C3): `users.profile`, `memories.source`, `POST /api/profile`, `user_id` on chat, the `remember` tool, the per-turn traveler block, prompt v3; D1 settled (OyuLLM writes the welcome summary). Designs for the welcome flow and the AYLAND Network in `docs/superpowers/specs/` |
