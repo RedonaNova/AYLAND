@@ -52,14 +52,14 @@ const now = () => new Date().toISOString();
  */
 export function Onboarding() {
   const profile = useProfile();
-  const retried = useRef(false);
+  const checked = useRef(false);
 
   useEffect(() => {
-    // Answers the backend didn't get last time: one retry per page load.
-    if (profile?.status === "done" && !profile.synced && !retried.current) {
-      retried.current = true;
-      void resyncProfile(profile);
-    }
+    // Decided once, from what this page load found: answers the backend missed on an earlier visit are re-sent.
+    // A flow finished just now (backend down) waits for the next visit instead of retrying straight away.
+    if (profile === undefined || checked.current) return;
+    checked.current = true;
+    if (profile?.status === "done" && !profile.synced) void resyncProfile(profile);
   }, [profile]);
 
   return <AnimatePresence>{profile === null && <Flow key="welcome" />}</AnimatePresence>;
@@ -107,8 +107,10 @@ function Flow() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
-      // A focused button handles its own Enter; the notes field takes new lines.
-      if (e.target instanceof HTMLButtonElement || e.target instanceof HTMLTextAreaElement) return;
+      // The notes field takes new lines, and the X, back, stepper and Дараах buttons act on their own Enter. An
+      // answer chip keeps focus after a click, so there Enter moves on instead of toggling the answer (Space toggles).
+      if (e.target instanceof HTMLTextAreaElement) return;
+      if (e.target instanceof HTMLButtonElement && !e.target.hasAttribute("aria-pressed")) return;
       e.preventDefault();
       if (step) next();
       else start();
@@ -144,14 +146,17 @@ function Flow() {
               <div className="lg:hidden">
                 <PortraitPill answers={answers} fresh={fresh} />
               </div>
-              <button
-                type="button"
-                onClick={skip}
-                aria-label={t.close}
-                className="grid size-9 place-items-center rounded-full text-fg-subtle transition-colors hover:bg-white/5 hover:text-fg"
-              >
-                <X className="size-5" />
-              </button>
+              {/* Before the end the X skips; once the answers are sent it closes with them (hidden while writing). */}
+              {(step || writeUp) && (
+                <button
+                  type="button"
+                  onClick={step ? skip : start}
+                  aria-label={step ? t.close : t.dismiss}
+                  className="grid size-9 place-items-center rounded-full text-fg-subtle transition-colors hover:bg-white/5 hover:text-fg"
+                >
+                  <X className="size-5" />
+                </button>
+              )}
             </div>
           </header>
 

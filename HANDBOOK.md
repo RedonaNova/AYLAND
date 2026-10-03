@@ -409,7 +409,7 @@ Tool inputs take points as `{ lon, lat }` (the model can't swap a named pair); o
 | `update_trip_plan` | `changes[]`: `cancel` / `move` (`start`, `end`, optional `date`) / `add` (`item`) / `replace` (`item_id`, `item`); `reason`; optional `date` | New `version`, the changed ids and today's budget; emits `plan.updated` on the trip events. Only `planned` items change (booked ones go through the consent gate); new items are free or pay-on-site, never offers; clashes, past times and going over the daily limit are refused with a reason |
 | `propose_booking` | `offer_id`, `slot_start`, `party_size` (default the party) | A proposal with `status: proposed` (any other open one expires), `fits_budget`, `remaining_after_usd`; emits `proposal.created { proposal, offer }` |
 | `undo_plan_change` | (none) | Brings the previous version back as a new version (so an undo can be undone); refused once a booking changed since |
-| `remember` | `text` (one Mongolian sentence, ≤ 200), `kind` (`preference` or `fact`) | Saves a memory for the traveler who is asking (`source: "chat"`). Every turn already starts with that traveler's profile and latest 12 memories, so there is no `recall` call on the hot path |
+| `remember` | `text` (one Mongolian sentence, ≤ 200), `kind` (`preference` or `fact`) | Saves a memory for the traveler who is asking (`source: "chat"`); only welcome-flow visitors (`v_<uuid>`) have one, so no visitor can write into the trip owner's memory. Every turn already starts with that traveler's profile and latest 12 memories, so there is no `recall` call on the hot path |
 | `recall` *(Should)* | `query` | Returns the top-k memories by vector search |
 
 ### 8.3 A2A agents
@@ -436,7 +436,7 @@ Tool inputs take points as `{ lon, lat }` (the model can't swap a named pair); o
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/chat` | `{ trip_id, message, user_id? }` returns an SSE event stream (below). `user_id` (a `v_<uuid>` visitor who finished the welcome flow) picks whose profile and memories start the turn; without it, the trip owner's |
-| POST | `/api/profile` | `{ visitor_id: "v_<uuid>", answers }` (the welcome flow): saves `users.profile` and one onboarding memory per answer; returns `{ summary, suggestions[3], via: "oyu" }` written by OyuLLM, or `{ summary: null, suggestions: [], via: null }` (the web app then uses its templates). Other ids → 422 |
+| POST | `/api/profile` | `{ visitor_id: "v_<uuid>", answers, summarize? }` (the welcome flow; `summarize: false` re-sends answers without another OyuLLM call): saves `users.profile` and one onboarding memory per answer; returns `{ summary, suggestions[3], via: "oyu" }` written by OyuLLM, or `{ summary: null, suggestions: [], via: null }` (the web app then uses its templates). Other ids → 422 |
 | POST | `/api/chat/runs` | The same turn, started in the background: returns `{ run_id }` (what the web client uses) |
 | GET | `/api/chat/runs/{run_id}/events?cursor=` | Long poll (≤20 s): `{ events[], cursor, done }`, the same events as the SSE stream; works through proxies that buffer streams |
 | DELETE | `/api/chat/runs/{run_id}` | Cancels a turn (reset or mode switch mid-turn) |
@@ -572,7 +572,7 @@ Tick a box only after the task's tests pass (offline first, then live, which spe
 - [ ] **M3-B1** Budget service: planned, booked and remaining for today. *(built 2026-10-03: `ayland/budget.py`, the same formula as the web meter; offline tests pass; tick after a live re-plan)*
 - [ ] **M3-B2** *(Should)* Embed offers, create the Atlas Vector Search index, and use semantic search inside `search_offers`.
 - [ ] **M3-B3** *(Should)* `remember` and `recall` tools on `memories`. *(`remember` built 2026-10-03 with the welcome flow, and every turn starts with the traveler's profile and latest memories; `recall` with vector search is still open)*
-- [x] **M3-C3** Welcome flow: seven skippable questions once per browser, a live traveler portrait, answers saved as the visitor's memories (`POST /api/profile`), OyuLLM's summary and starter suggestions with template fallback, the chat greeting by name. *(offline tests and Playwright pass; spec and plan in `docs/superpowers/`)*
+- [ ] **M3-C3** Welcome flow: seven skippable questions once per browser, a live traveler portrait, answers saved as the visitor's memories (`POST /api/profile`), OyuLLM's summary and starter suggestions with template fallback, the chat greeting by name. *(built 2026-10-03; offline tests and Playwright pass; spec and plan in `docs/superpowers/`; tick after one live OyuLLM summary and one Claude turn that respects a profile's diet)*
 - [ ] **M3-C1** Today's timeline with live updates on `plan.updated`, plus the budget meter. *(UI built in v0; live `plan.updated` refreshes it, Playwright-tested against a scripted backend; tick after a live re-plan)*
 - [ ] **M3-C2** *(Should)* Map with the hotel and plan items as pins and a route line to the next item. *(UI built in v0; it follows the live plan and option cards)*
 

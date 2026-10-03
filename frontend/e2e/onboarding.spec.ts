@@ -94,6 +94,58 @@ test("the X skips the flow for good, and the demo controls can replay it", async
   await expect(page.getByRole("dialog")).toBeVisible();
 });
 
+test("Enter after clicking an answer moves on and keeps the answer", async ({ page }) => {
+  await backendDown(page);
+  await page.goto("/");
+  const flow = page.getByRole("dialog");
+  await flow.getByRole("textbox", { name: "Нэр" }).fill("Сарнай");
+  await page.keyboard.press("Enter");
+  await button(page, "Ганцаараа").click();
+  await page.keyboard.press("Enter");
+  await expect(flow.getByRole("heading", { name: "Аяллын төсөв тань ямар вэ?" })).toBeVisible();
+  await expect(flow.getByRole("region", { name: "Аялагчийн хөрөг" }).getByText("Ганцаараа")).toBeVisible();
+});
+
+test("closing the finished screen keeps the answers that were sent", async ({ page }) => {
+  await backendDown(page);
+  await page.goto("/");
+  await page.getByRole("dialog").getByRole("textbox", { name: "Нэр" }).fill("Сарнай");
+  for (let step = 0; step < 6; step++) await button(page, "Дараах").click();
+  await button(page, "Дуусгах").click();
+  await expect(page.getByRole("dialog").getByRole("heading", { name: "Бэлэн боллоо, Сарнай!" })).toBeVisible();
+  await button(page, "Хаах").click();
+  await expect(page.getByRole("heading", { name: "Сайн байна уу, Сарнай! Хаанаас эхлэх вэ?" })).toBeVisible();
+});
+
+test("answers the backend missed are re-sent on the next visit, without another write-up", async ({ page }) => {
+  const posts: Array<Record<string, unknown>> = [];
+  let up = false;
+  await page.route("**/api/profile", async (route) => {
+    posts.push(route.request().postDataJSON());
+    if (!up) return route.fulfill({ status: 503, contentType: "application/json", body: '{"detail":"down"}' });
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ summary: null, suggestions: [], via: null }) });
+  });
+  await page.goto("/");
+  await page.getByRole("dialog").getByRole("textbox", { name: "Нэр" }).fill("Сарнай");
+  for (let step = 0; step < 6; step++) await button(page, "Дараах").click();
+  await button(page, "Дуусгах").click();
+  await button(page, "Эхлэх").click();
+  await expect(page.getByRole("heading", { name: "Сайн байна уу, Сарнай! Хаанаас эхлэх вэ?" })).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(posts).toHaveLength(1); // no instant retry in the same page load
+
+  up = true;
+  await page.reload();
+  await expect.poll(() => posts.length).toBe(2);
+  expect(posts[1]).toMatchObject({ answers: { name: "Сарнай" }, summarize: false });
+  const synced = () => page.evaluate(() => JSON.parse(localStorage.getItem("ayland.profile") ?? "{}").synced);
+  await expect.poll(synced).toBe(true);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Сайн байна уу, Сарнай! Хаанаас эхлэх вэ?" })).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(posts).toHaveLength(2); // saved now: no more retries
+});
+
 test("on a phone the portrait is a pill that opens the card", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await backendDown(page);

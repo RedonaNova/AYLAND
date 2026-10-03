@@ -195,6 +195,7 @@ export const mn = {
   onboarding: {
     title: "Танилцах",
     close: "Алгасах",
+    dismiss: "Хаах",
     next: "Дараах",
     finish: "Дуусгах",
     back: "Буцах",

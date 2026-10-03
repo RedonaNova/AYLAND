@@ -7,6 +7,7 @@ tool's result, so it lands in the turn that caused it.
 """
 
 import json
+import re
 from typing import Any
 
 from claude_agent_sdk import McpSdkServerConfig, SdkMcpTool, create_sdk_mcp_server, tool
@@ -275,8 +276,10 @@ async def remember_fact(trip_id: str, args: dict[str, Any]) -> dict[str, Any]:
     user_id = turn_users.get(trip_id, "")
     sentence = str(args.get("text", "")).strip()
     kind = "preference" if args.get("kind") == "preference" else "fact"
-    if not user_id:
-        return _refused(ValueError("No traveler to remember this for."))
+    # Only a welcome-flow visitor has a memory of their own: anyone else chats as the trip owner (Bat), whose
+    # memory every other visitor and the stage demo read.
+    if not re.fullmatch(memory.VISITOR_PATTERN, user_id):
+        return _refused(ValueError("This traveler has no memory of their own yet; don't promise to remember."))
     if not sentence or len(sentence) > MEMORY_MAX:
         return _refused(ValueError(f"Give one Mongolian sentence of at most {MEMORY_MAX} characters."))
     await memory.remember(get_db(), user_id, sentence, kind, trip_id)

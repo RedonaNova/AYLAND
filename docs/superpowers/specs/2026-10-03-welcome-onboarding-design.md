@@ -73,7 +73,7 @@ Full-screen overlay above the app, mounted by `AppShell` when the browser has no
 - `visitor_id` must match `^v_[0-9a-f-]{36}$`; anything else (including `user_bat`) → 422. No visitor can overwrite a seeded user.
 - Saves `users` and `memories` as above, then asks OyuLLM for the summary and suggestions.
 - Returns `{ summary: string | null, suggestions: string[], via: "oyu" | null }`. `summary: null` (and `suggestions: []`) when `ONBOARDING_LLM=off`, the daily cap is reached, OyuLLM fails, or it takes longer than 8 s. The client then uses its templates.
-- MongoDB unavailable → 503; the client keeps the answers locally with `synced: false` and retries once on the next visit.
+- MongoDB unavailable → 503; the client keeps the answers locally with `synced: false` and re-sends them once per later page load (with `summarize: false`, so no second OyuLLM call) until one is saved. *(Revised after the final review: a single retry fired right away in the same page load and then gave up.)*
 
 **OyuLLM** (`llm/oyu.chat`): Mongolian instructions in `prompts/onboarding.md`. In: the answers. Out: JSON `{ "summary": "<2 sentences addressing {name}>", "suggestions": ["<≤ 7 words>", ×3] }` for the current destination (Hanoi). Parsed defensively; anything malformed counts as a failure. Settings: `onboarding_llm: "oyu" | "off"` (default `"oyu"`), `onboarding_llm_daily_cap: int` (default 200, counted in process memory per Hanoi day).
 
@@ -109,7 +109,9 @@ The mock orchestrator reads the browser profile: the greeting uses the name; sta
 
 | Case | Behaviour |
 |---|---|
-| Backend down or Mock mode without a backend | Flow completes; template summary; `synced: false`; one retry on next load |
+| Backend down or Mock mode without a backend | Flow completes; template summary; `synced: false`; re-sent on each later page load until saved |
+| X on the finished screen | Closes with the answers (they were already sent); hidden while the summary is being written |
+| Enter after clicking an answer | Moves to the next step; the answer stays (Space toggles a focused answer) |
 | OyuLLM off, capped, slow (> 8 s) or malformed | `summary: null` → templates; no "OyuLLM бичсэн" credit |
 | Storage blocked (private window) | Flow shows every visit; nothing breaks |
 | Skipped with X | `status: "skipped"`; nothing sent; chat behaves as today |

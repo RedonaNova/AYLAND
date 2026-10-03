@@ -237,6 +237,8 @@ async def trip_event_poll(trip_id: str, cursor: str = "") -> dict[str, Any]:
 class ProfileRequest(BaseModel):
     visitor_id: str = Field(pattern=memory.VISITOR_PATTERN)
     answers: Profile
+    # False when the web app re-sends answers the backend missed: save them without another OyuLLM call.
+    summarize: bool = True
 
 
 @app.post("/api/profile")
@@ -244,7 +246,7 @@ async def save_profile(body: ProfileRequest) -> dict[str, Any]:
     """The welcome flow's answers become the visitor's long-term memory. OyuLLM writes the summary and starter
     suggestions; `summary: null` tells the web app to use its templates instead."""
     await memory.save_profile(get_db(), body.visitor_id, body.answers)
-    written = await onboarding.write(body.answers)
+    written = await onboarding.write(body.answers) if body.summarize else None
     if written is None:
         return {"summary": None, "suggestions": [], "via": None}
     return {"summary": written.summary, "suggestions": written.suggestions, "via": "oyu"}

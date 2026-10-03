@@ -217,11 +217,11 @@ export function mockNote(profile: StoredProfile | null): string {
   return interest ? mn.onboarding.mock.interest(name, lower(mn.onboarding.interests.options[interest])) : "";
 }
 
-async function post(answers: Answers): Promise<ProfileWriteUp> {
+async function post(answers: Answers, summarize = true): Promise<ProfileWriteUp> {
   const response = await fetch("/api/profile", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ visitor_id: visitorId(), answers: normalize(answers) }),
+    body: JSON.stringify({ visitor_id: visitorId(), answers: normalize(answers), summarize }),
     signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
@@ -245,12 +245,15 @@ export async function submitProfile(answers: Answers): Promise<WriteUp> {
   }
 }
 
-/** One retry, on a later visit, for answers the backend didn't get. Marked synced either way: no retry loop. */
+/**
+ * Re-sends answers the backend didn't get, once per page load (the caller decides when), without another OyuLLM
+ * write-up. Marked synced only when it worked, and only if the visitor hasn't replayed the flow meanwhile.
+ */
 export async function resyncProfile(profile: StoredProfile): Promise<void> {
   try {
-    await post(profile.answers);
+    await post(profile.answers, false);
   } catch {
-    // Still no backend: the answers stay in this browser only.
+    return; // still no backend: try again on the next visit
   }
-  saveLocalProfile({ ...profile, synced: true });
+  if (getProfile()?.completed_at === profile.completed_at) saveLocalProfile({ ...profile, synced: true });
 }
