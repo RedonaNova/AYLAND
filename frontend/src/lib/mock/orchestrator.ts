@@ -4,6 +4,7 @@
 
 import type { AylandApi } from "../api";
 import { addMinutes, countMn, dayBudget, dayOf, groupAmount, hhmm, minutesOf, usd } from "../format";
+import { getProfile, mockNote } from "../profile";
 import type { A2AStatus, AgentEvent, Booking, Offer, PlanItem, Proposal, TripOption, TripView, Weather } from "../types";
 import { lookup } from "./phrasebook";
 import {
@@ -213,7 +214,8 @@ export function createMockOrchestrator(): AylandApi {
     yield* stream(intro);
     yield { type: "options", data: { run_id: runId, options } };
     await sleep(350);
-    yield* stream("\n\nГурвуулаа төсөвт багтана. Аль нэгийг нь сонговол би захиалгыг бэлдээд, **таны зөвшөөрлийг** авна.");
+    // A visitor who finished the welcome flow hears that their profile shaped the picks.
+    yield* stream(`\n\nГурвуулаа төсөвт багтана.${mockNote(getProfile())} Аль нэгийг нь сонговол би захиалгыг бэлдээд, **таны зөвшөөрлийг** авна.`);
     yield done();
   }
 

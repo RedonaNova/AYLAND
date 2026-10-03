@@ -1,11 +1,12 @@
 "use client";
 
-import { CloudRain, CloudSun, FlaskConical, RotateCcw, X } from "lucide-react";
+import { CloudRain, CloudSun, FlaskConical, RotateCcw, Sparkles, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { mn } from "@/i18n/mn";
 import { type ApiMode, getApi, type Health } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { clearLocalProfile } from "@/lib/profile";
 import { useStore } from "@/lib/store";
 
 /** Mock (scripted, always works) or Live (FastAPI: MongoDB, Claude, Novelsoft). Live is checked first. */
@@ -107,6 +108,14 @@ export function DemoControls({ className }: { className?: string }) {
       >
         <RotateCcw className="size-3.5" />
         {mn.demo.reset}
+      </button>
+      <button
+        type="button"
+        onClick={clearLocalProfile}
+        className="flex w-full items-center justify-center gap-1.5 rounded-xl py-1.5 text-xs text-fg-muted transition-colors hover:bg-white/5 hover:text-fg"
+      >
+        <Sparkles className="size-3.5" />
+        {mn.onboarding.replay}
       </button>
       <p className="mt-1.5 text-center text-[10.5px] text-fg-subtle/80">Alt+R · Alt+C · Alt+N</p>
     </div>
