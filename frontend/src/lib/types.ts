@@ -166,3 +166,26 @@ export type AgentEvent =
   | { type: "error"; data: { message: string } };
 
 export type Lang = "mn" | "en";
+
+/** The welcome flow's answers (HANDBOOK §8.1 users.profile); every field is optional. */
+export interface Answers {
+  name?: string;
+  party?: "solo" | "couple" | "family" | "friends";
+  party_size?: number;
+  kids?: boolean;
+  budget?: "thrifty" | "mid" | "comfort";
+  splurge?: Array<"stay" | "food" | "experiences" | "shopping">;
+  pace?: "relaxed" | "normal" | "packed";
+  diet?: Array<"halal" | "vegetarian" | "no_seafood" | "mild_spice" | "dairy_free">;
+  misses_mongolian_food?: boolean;
+  interests?: Array<"history" | "food" | "nature" | "art" | "shopping" | "nightlife" | "photo" | "spa" | "kids">;
+  english?: "fluent" | "some" | "none";
+  notes?: string;
+}
+
+/** POST /api/profile: OyuLLM's write-up, or `summary: null` when the web app should use its templates. */
+export interface ProfileWriteUp {
+  summary: string | null;
+  suggestions: string[];
+  via: "oyu" | null;
+}

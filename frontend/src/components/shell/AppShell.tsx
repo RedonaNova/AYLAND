@@ -4,6 +4,7 @@ import { Languages, Luggage, MessageCircle, Network } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Onboarding } from "@/components/onboarding/Onboarding";
 import { RainOverlay } from "@/components/today/RainOverlay";
 import { WeatherIcon } from "@/components/today/WeatherCard";
 import { mn } from "@/i18n/mn";
@@ -40,6 +41,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
       <BottomNav pathname={pathname} />
       <MobileDemoControls />
+      <Onboarding />
     </div>
   );
 }

@@ -14,6 +14,11 @@ def system_prompt(trip_id: str, today: str, now: str) -> str:
     return template.format(trip_id=trip_id, today=today, now=now)
 
 
+def onboarding_prompt() -> str:
+    """OyuLLM's instructions for the welcome flow's summary and starter suggestions."""
+    return (_HERE / "onboarding.md").read_text(encoding="utf-8")
+
+
 def rain_nudge(affected: list[tuple[str, str]]) -> dict[str, object]:
     """The Act 1 nudge (HANDBOOK §3) for (HH:MM, title) items that rain puts at risk."""
     count = NUMBERS_MN[len(affected)] if len(affected) < len(NUMBERS_MN) else str(len(affected))
