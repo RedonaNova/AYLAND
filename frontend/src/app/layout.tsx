@@ -1,18 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Manrope, Unbounded } from "next/font/google";
+import { JetBrains_Mono } from "next/font/google";
 import { AppShell } from "@/components/shell/AppShell";
 import { Providers } from "@/components/shell/Providers";
 import "./globals.css";
 
 // Mongolian needs cyrillic-ext (Ө ө Ү ү); Hanoi place names need the Vietnamese subset.
-const manrope = Manrope({
+const jetbrainsMono = JetBrains_Mono({
   variable: "--font-body",
-  subsets: ["latin", "cyrillic", "cyrillic-ext", "vietnamese"],
-});
-
-const unbounded = Unbounded({
-  variable: "--font-unbounded",
-  subsets: ["latin", "cyrillic", "cyrillic-ext"],
+  subsets: ["latin", "latin-ext", "cyrillic", "cyrillic-ext", "vietnamese"],
 });
 
 export const metadata: Metadata = {
@@ -29,7 +24,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="mn" className={`${manrope.variable} ${unbounded.variable} h-full`}>
+    <html lang="mn" className={`${jetbrainsMono.variable} h-full`}>
       <body className="h-full overflow-hidden">
         <Providers>
           <AppShell>{children}</AppShell>

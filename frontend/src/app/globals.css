@@ -2,9 +2,9 @@
 
 /* AYLAND · Morgensonne: night-blue ink with a sunrise accent. */
 @theme {
-  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-unbounded), var(--font-body), ui-sans-serif, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "Cascadia Code", Menlo, monospace;
+  --font-sans: var(--font-body), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: var(--font-body), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-mono: var(--font-body), ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --color-ink-950: #07080c;
   --color-ink-900: #0b0d13;
