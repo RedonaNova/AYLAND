@@ -96,11 +96,32 @@ class Preferences(Doc):
     notes: str = ""
 
 
+class Profile(Doc):
+    """The welcome flow's answers (users.profile). Every field is optional: each step can be skipped."""
+
+    name: str = Field("", max_length=40)
+    party: Literal["solo", "couple", "family", "friends"] | None = None
+    party_size: int | None = Field(None, ge=1, le=12)
+    kids: bool | None = None
+    budget: Literal["thrifty", "mid", "comfort"] | None = None
+    splurge: list[Literal["stay", "food", "experiences", "shopping"]] = Field([], max_length=4)
+    pace: Literal["relaxed", "normal", "packed"] | None = None
+    diet: list[Literal["halal", "vegetarian", "no_seafood", "mild_spice", "dairy_free"]] = Field([], max_length=5)
+    misses_mongolian_food: bool | None = None
+    interests: list[Literal["history", "food", "nature", "art", "shopping", "nightlife", "photo", "spa", "kids"]] = (
+        Field([], max_length=9)
+    )
+    english: Literal["fluent", "some", "none"] | None = None
+    notes: str = Field("", max_length=500)
+
+
 class User(Doc):
     id: str = Field(alias="_id")
     name: str
     language: Literal["mn"] = "mn"
     preferences: Preferences = Preferences()
+    profile: Profile | None = None
+    updated_at: AwareDatetime | None = None
 
 
 class Merchant(Doc):
@@ -168,9 +189,14 @@ class Memory(Doc):
     user_id: str
     trip_id: str | None = None
     kind: Literal["preference", "fact", "feedback"]
+    source: Literal["onboarding", "chat", "seed"] = "chat"
     text: str
     embedding: list[float] | None = None
     created_at: AwareDatetime
+
+    def to_mongo(self) -> dict[str, Any]:
+        # BSON date, so "the latest memories" sort chronologically.
+        return {**super().to_mongo(), "created_at": self.created_at}
 
 
 class Message(Doc):
