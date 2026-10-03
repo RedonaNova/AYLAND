@@ -7,6 +7,7 @@ import { SunMark } from "@/components/shell/SunMark";
 import { RainOverlay } from "@/components/today/RainOverlay";
 import { mn } from "@/i18n/mn";
 import { cn } from "@/lib/cn";
+import { displayName, useProfile } from "@/lib/profile";
 import { useStore } from "@/lib/store";
 import { COMPOSER_ID } from "./Composer";
 
@@ -28,6 +29,9 @@ const rise = {
 export function Welcome() {
   const { send, setDraft } = useStore();
   const router = useRouter();
+  const profile = useProfile();
+  // A visitor who finished the welcome flow is greeted by name, with their starter suggestions.
+  const personal = profile?.status === "done" ? profile : null;
 
   const prefill = (text: string) => {
     setDraft(text);
@@ -42,11 +46,33 @@ export function Welcome() {
       </motion.div>
 
       <motion.h1 variants={rise} className="mt-5 font-display text-[28px] font-semibold leading-tight sm:text-4xl">
-        {mn.welcome.greeting}
+        {personal ? mn.onboarding.greeting(displayName(personal.answers)) : mn.welcome.greeting}
       </motion.h1>
-      <motion.p variants={rise} className="mt-3 max-w-xl text-[16px] leading-relaxed text-fg-muted sm:text-lg">
-        {mn.welcome.intro}
-      </motion.p>
+      {personal ? (
+        <motion.div variants={rise} className="mt-5 flex flex-wrap gap-2">
+          {personal.suggestions.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              onClick={() => void send(suggestion)}
+              className="rounded-full bg-white/[0.05] px-4 py-2 text-left text-[14px] ring-1 ring-white/10 transition-colors hover:bg-white/[0.09]"
+            >
+              {suggestion}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => document.getElementById(COMPOSER_ID)?.focus()}
+            className="rounded-full border border-dashed border-white/20 px-4 py-2 text-[14px] text-fg-muted transition-colors hover:text-fg"
+          >
+            {mn.onboarding.somethingElse}
+          </button>
+        </motion.div>
+      ) : (
+        <motion.p variants={rise} className="mt-3 max-w-xl text-[16px] leading-relaxed text-fg-muted sm:text-lg">
+          {mn.welcome.intro}
+        </motion.p>
+      )}
 
       <motion.div variants={rise} className="scrollbar-none -mx-4 mt-6 flex gap-2 overflow-x-auto px-4">
         {CATEGORIES.map(({ icon: Icon, tone, action }, i) => (

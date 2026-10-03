@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
-from pymongo import ASCENDING, GEOSPHERE
+from pymongo import ASCENDING, DESCENDING, GEOSPHERE
 from pymongo.asynchronous.database import AsyncDatabase
 
 from ayland import clock
@@ -100,6 +100,7 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
     await db.messages.create_index([("trip_id", ASCENDING), ("ts", ASCENDING)])
     await db.agent_events.create_index([("trip_id", ASCENDING), ("ts", ASCENDING)])
     await db.trip_versions.create_index([("trip_id", ASCENDING), ("version", ASCENDING)])
+    await db.memories.create_index([("user_id", ASCENDING), ("created_at", DESCENDING)])
 
 
 async def _replace_all(db: AsyncDatabase, collection: str, docs: list[Doc]) -> None:

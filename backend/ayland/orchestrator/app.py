@@ -23,6 +23,7 @@ from ayland import clock, voice
 from ayland.config import get_settings
 from ayland.db import repo
 from ayland.db.client import MongoNotConfigured, explain, get_db, ping
+from ayland.db.models import Profile
 from ayland.demo import seed
 from ayland.llm import orchu
 from ayland.llm.claude import ClaudeCliNotFound, find_cli
@@ -30,7 +31,7 @@ from ayland.mcp_servers.common import ToolError
 from ayland.mcp_servers.travel_data import weather
 from ayland.novelsoft import OyuNotConfigured
 
-from . import a2a, prompts, proposals
+from . import a2a, memory, onboarding, prompts, proposals
 from .agent import Event, agent
 from .audit import audit
 from .events import trip_events
@@ -233,16 +234,36 @@ async def trip_event_poll(trip_id: str, cursor: str = "") -> dict[str, Any]:
     return jsonable_encoder(await trip_events.wait(trip_id, cursor, POLL_WAIT_S))
 
 
+class ProfileRequest(BaseModel):
+    visitor_id: str = Field(pattern=memory.VISITOR_PATTERN)
+    answers: Profile
+    # False when the web app re-sends answers the backend missed: save them without another OyuLLM call.
+    summarize: bool = True
+
+
+@app.post("/api/profile")
+async def save_profile(body: ProfileRequest) -> dict[str, Any]:
+    """The welcome flow's answers become the visitor's long-term memory. OyuLLM writes the summary and starter
+    suggestions; `summary: null` tells the web app to use its templates instead."""
+    await memory.save_profile(get_db(), body.visitor_id, body.answers)
+    written = await onboarding.write(body.answers) if body.summarize else None
+    if written is None:
+        return {"summary": None, "suggestions": [], "via": None}
+    return {"summary": written.summary, "suggestions": written.suggestions, "via": "oyu"}
+
+
 class ChatRequest(BaseModel):
     trip_id: str
     message: str = Field(min_length=1, max_length=2000)
+    # A visitor who finished the welcome flow; without it the turn uses the trip owner's profile.
+    user_id: str | None = Field(None, pattern=memory.VISITOR_PATTERN)
 
 
-async def chat_turn(trip_id: str, message: str, run_id: str) -> AsyncIterator[Event]:
+async def chat_turn(trip_id: str, message: str, run_id: str, user_id: str | None = None) -> AsyncIterator[Event]:
     """One agent turn as §8.4 events. The reply is stored in `messages`, tool calls in `agent_events`."""
     reply = ""
     try:
-        async for item in agent.run(trip_id, message, run_id):
+        async for item in agent.run(trip_id, message, run_id, user_id):
             data = item["data"]
             if item["type"] == "message.delta":
                 reply += data["text"]
@@ -272,12 +293,13 @@ async def chat_turn(trip_id: str, message: str, run_id: str) -> AsyncIterator[Ev
 async def start_chat(body: ChatRequest) -> Run:
     db = get_db()
     try:
-        await repo.get_trip(db, body.trip_id)  # only real trips get a Claude session
+        trip = await repo.get_trip(db, body.trip_id)  # only real trips get a Claude session
     except repo.TripNotFound as err:
         raise HTTPException(404, str(err)) from err
     run_id = f"run_{uuid.uuid4().hex[:10]}"
     await repo.save_message(db, body.trip_id, "user", body.message, run_id)
-    return runs.start(body.trip_id, lambda run: chat_turn(body.trip_id, body.message, run.id), run_id=run_id)
+    user_id = body.user_id or trip["owner_id"]
+    return runs.start(body.trip_id, lambda run: chat_turn(body.trip_id, body.message, run.id, user_id), run_id=run_id)
 
 
 @app.post("/api/chat")

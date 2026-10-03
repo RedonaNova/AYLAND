@@ -13,6 +13,16 @@ export default defineConfig({
     viewport: { width: 1440, height: 900 },
     channel: process.env.PW_CHANNEL,
     trace: "retain-on-failure",
+    // Every spec starts as a returning visitor who skipped the welcome flow; e2e/onboarding.spec.ts starts fresh.
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: "http://localhost:3000",
+          localStorage: [{ name: "ayland.profile", value: JSON.stringify({ version: 1, status: "skipped" }) }],
+        },
+      ],
+    },
   },
   webServer: {
     command: "npm run start",

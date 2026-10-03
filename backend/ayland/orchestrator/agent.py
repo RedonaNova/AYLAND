@@ -25,12 +25,14 @@ from claude_agent_sdk import (
     ToolUseBlock,
     UserMessage,
 )
+from pymongo.errors import PyMongoError
 
 from ayland import clock
 from ayland.config import get_settings
+from ayland.db.client import MongoNotConfigured, explain, get_db
 from ayland.llm.claude import ISOLATED_ENV, find_cli
 
-from . import prompts, tools
+from . import memory, prompts, tools
 
 Event = dict[str, Any]
 logger = logging.getLogger("ayland.agent")
@@ -109,17 +111,18 @@ class Agent:
             if client:
                 await client.disconnect()
 
-    async def run(self, trip_id: str, message: str, run_id: str) -> AsyncIterator[Event]:
+    async def run(self, trip_id: str, message: str, run_id: str, user_id: str | None = None) -> AsyncIterator[Event]:
         """One chat turn as §8.4 events. A turn cut short (cancelled run, error) discards the session,
         because unread messages would otherwise leak into the next turn."""
         async with self._turns[trip_id]:
             client = await self._session(trip_id)
             tools.outbox.pop(trip_id, None)  # events of a turn that died before sending them
             tools.turn_runs[trip_id] = run_id  # so the tools' agent_events carry this turn's id
+            tools.turn_users[trip_id] = user_id or ""  # whom `remember` writes for
             finished = False
             try:
                 await self._reconnect_mcp(client)
-                await client.query(message)
+                await client.query(await self._with_profile(message, user_id))
                 async for item in self._turn(client, trip_id, run_id):
                     yield item
                 finished = True
@@ -127,6 +130,19 @@ class Agent:
                 # Only this turn's own session: a reset may already have replaced it with a fresh one.
                 if not finished and self._sessions.get(trip_id) is client:
                     await self.close(trip_id)
+
+    @staticmethod
+    async def _with_profile(message: str, user_id: str | None) -> str:
+        """The traveler's message after the block of what AYLAND knows about them (only Claude sees it; the stored
+        message stays as typed). Without MongoDB the turn still runs, without the block."""
+        if not user_id:
+            return message
+        try:
+            block = await memory.context(get_db(), user_id)
+        except (PyMongoError, MongoNotConfigured) as err:
+            logger.warning("Traveler profile not loaded: %s", explain(err))
+            return message
+        return f"{block}\n\n{message}" if block else message
 
     @staticmethod
     async def _reconnect_mcp(client: ClaudeSDKClient) -> None:

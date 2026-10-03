@@ -6,6 +6,7 @@ import { A2A_AGENTS, A2A_SKILL_LABELS, type NodeId, toolMeta } from "./agents";
 import { type ApiMode, getApi, type Health, type Interpretation } from "./api";
 import { useApiMode } from "./mode";
 import { TRIP_ID } from "./mock/seed";
+import { chatUserId } from "./profile";
 import type { A2AStatus, AgentEvent, Booking, Lang, NudgeAction, Offer, Proposal, TripOption, TripView } from "./types";
 
 export type StepStatus = "running" | "ok" | "error";
@@ -290,7 +291,8 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
       if (!message) return;
       setDraft("");
       setItems((prev) => [...prev, { id: uid("u"), kind: "user", text: message, via }]);
-      await run((signal) => api.chat({ trip_id: TRIP_ID, message }, signal));
+      // A visitor who finished the welcome flow sends their id, so Claude reads their profile and memories.
+      await run((signal) => api.chat({ trip_id: TRIP_ID, message, user_id: chatUserId() }, signal));
     },
     [api, run],
   );
