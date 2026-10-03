@@ -8,7 +8,7 @@ This handbook is our single source of truth for **what** we build, **how** the p
 
 - **First time here?** Read §1 to §4 (about 10 minutes).
 - **While coding,** keep §7 (repo layout), §8 (contracts) and §10 (roadmap) open.
-- **Status:** v1.9 draft (2026-10-03). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
+- **Status:** v1.10 draft (2026-10-03). Anything marked *Proposed* gets confirmed at kickoff (see §6). A clickable **web demo v0** (mock orchestrator) lives on the `demo` branch; see §10 and §12.
 
 ---
 
@@ -636,7 +636,7 @@ Three people (and their Claude Code agents) in one repo on one day. What keeps u
 6. **Your own database.** Set `MONGODB_DB=ayland_<yourname>` in your `.env` and run `npm run seed`: your demo resets and test data never touch anyone else's. The demo PC keeps `ayland`.
 7. **Your own Claude login; one shared Novelsoft key.** Claude runs through each person's Claude Code login. Novelsoft calls spend the team's credit and share one rate limit: say in chat before a live voice or LLM test, and keep them few.
 8. **Two tasks at once?** Use a second worktree instead of switching branches: `git worktree add ../AYLAND-<task> -b feat/<task> origin/dev` (the `superpowers:using-git-worktrees` skill does this for you). Review agents get their own worktree too.
-9. **Nobody pushes to `dev`, `demo` or `main` directly.** PRs into `dev`; the lead promotes `dev` → `demo` at milestone exits and redeploys the demo PC (`demo-up.ps1 -Build -KeepTunnel`). Vercel redeploys from `demo` on its own.
+9. **Nobody pushes to `dev`, `demo` or `main` directly.** PRs into `dev`; the lead promotes `dev` → `demo` at milestone exits and redeploys the demo PC (`demo-up.ps1 -Build -KeepTunnel`). Vercel redeploys from `main` on its own.
 
 ### Sync rhythm
 
@@ -691,12 +691,39 @@ Each server also runs alone (`npm run mcp:travel`, `npm run mcp:merchant`, `npm 
 
 **Live demo on this PC:** from a checkout of `demo` with its own `.env`, `powershell -ExecutionPolicy Bypass -File demo-up.ps1 -Build` starts the MCP servers on :8501 and :8502, the Booking and Interpreter Agents on :8401 and :8402, the API on :8100, the web app on :3100 and a Cloudflare quick tunnel, and prints the public URL. Locally everything streams; through the quick tunnel a chat reply arrives in one piece at the end (quick tunnels buffer streamed responses), while nudges still arrive (long poll). `-KeepTunnel` restarts the app without changing the URL; `-Stop` stops everything. Frontend build settings: `AYLAND_API_ORIGIN` (where `/api` goes, default `http://localhost:8000`) and `NEXT_PUBLIC_AYLAND_MODE` (`live` to start in live mode).
 
-**Public web app on Vercel** (stable URL; set up by the repo owner). The frontend deploys to Vercel; the backend stays on the demo PC (Claude runs through its CLI login) and is reached through the Cloudflare quick tunnel that `demo-up.ps1` opens. Mock mode needs no backend at all, so the public link always works.
+**Backend on a Linux server (pm2).** The orchestrator, both MCP servers and both A2A agents run as five pm2 processes ([`ecosystem.config.cjs`](ecosystem.config.cjs)), so the live backend no longer depends on a laptop. No `requirements.txt`: `backend/uv.lock` pins every package, and uv installs Python 3.12 itself. For Ubuntu or Debian, as the user that will run pm2:
+
+```bash
+sudo apt update && sudo apt install -y git curl
+curl -LsSf https://astral.sh/uv/install.sh | sh                  # uv (it downloads Python 3.12 on the first sync)
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs
+sudo npm install -g pm2                                           # Node is only here for pm2
+curl -fsSL https://claude.ai/install.sh | bash                    # Claude Code, for the one-time login
+exec $SHELL -l                                                    # puts uv and claude on PATH
+
+git clone https://github.com/RedonaNova/AYLAND.git && cd AYLAND   # private repo: a GitHub token or deploy key
+git switch main
+# copy .env here from your laptop (below), then:
+uv --directory backend sync --frozen --no-dev                     # exactly the versions in backend/uv.lock
+claude                                                            # log in once: open the link on your laptop, paste the code, /exit
+pm2 start ecosystem.config.cjs
+curl -s localhost:8000/api/health                                 # every service "ok": true
+pm2 save && pm2 startup                                           # run the command it prints: a reboot restarts everything
+```
+
+- **`.env`:** copy it from your laptop (`scp .env user@server:~/AYLAND/.env`), never through git or a chat. Delete any `CLAUDE_CLI_PATH` line (a Windows path; on Linux the SDK brings its own CLI). Keep `MONGODB_DB=ayland`.
+- **MongoDB Atlas:** add the server's public IP (`curl -s https://api.ipify.org`) under Security → Network Access, or `/api/health` reports "Atlas refused this machine".
+- **Claude:** the login belongs to one Linux user (`~/.claude`), so run `claude` as the user that runs pm2. If the login won't complete there, run `claude setup-token` on your laptop and `export CLAUDE_CODE_OAUTH_TOKEN=<token>` on the server before `pm2 start`, then `pm2 save`.
+- **Reaching it:** only the API (:8000) listens beyond the server; the MCP servers and agents answer localhost only. Either open TCP 8000 in the server's firewall and set Vercel's `AYLAND_API_ORIGIN` to `http://<server-ip>:8000` (stable: set it and redeploy once; not yet tried from Vercel), or keep a quick tunnel next to it (install `cloudflared`, then `pm2 start cloudflared --name ayland-tunnel --interpreter none -- tunnel --no-autoupdate --url http://localhost:8000`, URL in `pm2 logs ayland-tunnel`). Behind a tunnel or reverse proxy, start with `AYLAND_API_HOST=127.0.0.1` so :8000 stays local too.
+- **Update:** `git pull && uv --directory backend sync --frozen --no-dev && pm2 reload ecosystem.config.cjs`. Watch it with `pm2 status` and `pm2 logs`. Keep one instance per service: chat runs and trip events live in the API's memory.
+- **One backend at a time:** once the server is live, stop the laptop demo (`demo-up.ps1 -Stop`), so a single backend owns the `ayland` database and its demo resets.
+
+**Public web app on Vercel** (stable URL; set up by the repo owner). The frontend deploys to Vercel; the backend runs on our server (above) or on the demo PC through the Cloudflare quick tunnel that `demo-up.ps1` opens (Claude runs through the CLI login either way). Mock mode needs no backend at all, so the public link always works.
 
 1. Vercel → **Add New → Project** → import `RedonaNova/AYLAND`. Project name **`ayland`** (gives `ayland.vercel.app` if it is free; otherwise e.g. `ayland-morgensonne`).
 2. **Root Directory:** `frontend` (framework Next.js is detected; build and install commands stay default).
-3. **Environment variable:** `AYLAND_API_ORIGIN` = the tunnel URL that `demo-up.ps1` prints (`https://….trycloudflare.com`, no trailing slash). Leave `NEXT_PUBLIC_AYLAND_MODE` unset so visitors start in Mock mode.
-4. **Settings → Git → Production Branch:** `demo`, so every push to `demo` redeploys the public app.
+3. **Environment variable:** `AYLAND_API_ORIGIN` = the backend's public URL: the server's (above) or the tunnel URL that `demo-up.ps1` prints (`https://….trycloudflare.com`), no trailing slash. Leave `NEXT_PUBLIC_AYLAND_MODE` unset so visitors start in Mock mode.
+4. **Settings → Git → Production Branch:** `main`, so every merge into `main` redeploys the public app.
 5. When the tunnel URL changes (it only does when cloudflared restarts, e.g. after a reboot; `-KeepTunnel` keeps it), update `AYLAND_API_ORIGIN` and **Redeploy** (or `npx vercel env add AYLAND_API_ORIGIN production --force` then `npx vercel --prod` from `frontend/`).
 
 Live mode works through Vercel and the tunnel even though both may buffer streamed responses: chat turns run in the background on the orchestrator and the browser long-polls their events (`/api/chat/runs`), like the trip events.
@@ -782,3 +809,4 @@ Live mode works through Vercel and the tunnel even though both may buffer stream
 | 2026-10-03 | v1.7 | M2 review: chat turns as background runs read by long poll (works through tunnels and Vercel), early tool.start, MCP reconnect, slot matching as times; Vercel deployment steps (§12); M1 and M2 exit checks passed live; prompt v1.1 |
 | 2026-10-03 | v1.8 | M3 built: `update_trip_plan` (cancel / move / add / replace, versioned in `trip_versions`) and `undo_plan_change`, `propose_booking` with `proposal.created { proposal, offer }`, reject endpoint, budget service; prompt v2 |
 | 2026-10-03 | v1.9 | Team setup: shared CLAUDE.md and plugins (.claude/settings.json), CI on every PR, PR template, folder ownership per workstream (§9) and how to work in parallel (§11) |
+| 2026-10-03 | v1.10 | Backend on a Linux server with pm2 (`ecosystem.config.cjs`, §12); Vercel deploys from `main` |
